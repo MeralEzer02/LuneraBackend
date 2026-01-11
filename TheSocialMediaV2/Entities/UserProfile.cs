@@ -20,7 +20,7 @@ namespace TheSocialMediaV2.Entities
                 return age;
             }
         }
-
+         
         public string Zodiac { get; set; } = string.Empty;
         public string Bio { get; set; } = string.Empty;
         public bool IdentityVisible { get; set; } = false;
