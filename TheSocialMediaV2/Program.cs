@@ -1,11 +1,17 @@
+using TheSocialMediaV2.API.Middlewares;
 using Microsoft.OpenApi.Models;
 using Microsoft.EntityFrameworkCore;
 using TheSocialMediaV2.API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 0. Serilog Loglama Sistemini Baþlat
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
 
 // Add services to the container.
 
@@ -19,7 +25,7 @@ builder.Services.AddEndpointsApiExplorer();
 // Swagger Ayarlarý (JWT Desteði ile)
 builder.Services.AddSwaggerGen(option =>
 {
-    option.SwaggerDoc("v1", new OpenApiInfo { Title = "TheSocialMediaV2.API.API.API API", Version = "v1" });
+    option.SwaggerDoc("v1", new OpenApiInfo { Title = "TheSocialMediaV2 API", Version = "v1" });
 
     // Kilit Ekranýný (Authorize) Aktif Etme
     option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -72,6 +78,9 @@ builder.Services.AddAuthentication(options =>
 });
 
 var app = builder.Build();
+
+// Özel Hata Yakalayýcý Middleware
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
