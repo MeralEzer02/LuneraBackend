@@ -1,6 +1,6 @@
-@TheSocialMediaV2_HostAddress = http://localhost:5271
+@TheSocialMediaV2.API.API.API_HostAddress = http://localhost:5271
 
-GET {{TheSocialMediaV2_HostAddress}}/weatherforecast/
+GET {{TheSocialMediaV2.API.API.API_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###

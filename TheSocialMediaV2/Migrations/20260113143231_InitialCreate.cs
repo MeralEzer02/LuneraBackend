@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace TheSocialMediaV2.Migrations
+namespace TheSocialMediaV2.API.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -87,9 +87,8 @@ namespace TheSocialMediaV2.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     RealName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Nickname = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Gender = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Gender = table.Column<int>(type: "int", nullable: false),
                     BirthDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Zodiac = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Bio = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     IdentityVisible = table.Column<bool>(type: "bit", nullable: false)
                 },

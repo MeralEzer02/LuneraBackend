@@ -1,4 +1,4 @@
-﻿namespace TheSocialMediaV2.Enums
+﻿namespace TheSocialMediaV2.API.Enums
 {
     public enum ZodiacSign
     {

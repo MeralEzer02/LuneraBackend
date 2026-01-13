@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TheSocialMediaV2.Utilities
+namespace TheSocialMediaV2.API.Utilities
 {
     public static class AgeCalculator
     {

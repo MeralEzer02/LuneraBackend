@@ -1,5 +1,6 @@
+using Microsoft.OpenApi.Models;
 using Microsoft.EntityFrameworkCore;
-using TheSocialMediaV2.Data;
+using TheSocialMediaV2.API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -14,7 +15,38 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Swagger Ayarlarý (JWT Desteði ile)
+builder.Services.AddSwaggerGen(option =>
+{
+    option.SwaggerDoc("v1", new OpenApiInfo { Title = "TheSocialMediaV2.API.API.API API", Version = "v1" });
+
+    // Kilit Ekranýný (Authorize) Aktif Etme
+    option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        In = ParameterLocation.Header,
+        Description = "Lütfen token'ý 'Bearer [boþluk] TOKEN' formatýnda giriniz.",
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey,
+        BearerFormat = "JWT",
+        Scheme = "Bearer"
+    });
+
+    option.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type=ReferenceType.SecurityScheme,
+                    Id="Bearer"
+                }
+            },
+            new string[]{}
+        }
+    });
+});
 
 // 2. JWT Authentication Ayarlarý
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");

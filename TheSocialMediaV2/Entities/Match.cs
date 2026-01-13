@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TheSocialMediaV2.Entities
+namespace TheSocialMediaV2.API.Entities
 {
     public class Match
     {

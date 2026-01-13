@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using TheSocialMediaV2.Entities;
+using TheSocialMediaV2.API.Entities;
 
-namespace TheSocialMediaV2.Data
+namespace TheSocialMediaV2.API.Data
 {
     public class AppDbContext : DbContext
     {

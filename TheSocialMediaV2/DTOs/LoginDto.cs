@@ -1,4 +1,4 @@
-﻿namespace TheSocialMediaV2.DTOs
+﻿namespace TheSocialMediaV2.API.DTOs
 {
     public class LoginDto
     {

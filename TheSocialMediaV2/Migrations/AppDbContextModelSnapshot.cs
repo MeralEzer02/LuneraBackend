@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using TheSocialMediaV2.Data;
+using TheSocialMediaV2.API.Data;
 
 #nullable disable
 
-namespace TheSocialMediaV2.Migrations
+namespace TheSocialMediaV2.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
     partial class AppDbContextModelSnapshot : ModelSnapshot
@@ -22,7 +22,7 @@ namespace TheSocialMediaV2.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.AdminActionLog", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.AdminActionLog", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -48,7 +48,7 @@ namespace TheSocialMediaV2.Migrations
                     b.ToTable("AdminActionLogs");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.Match", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Match", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -76,7 +76,7 @@ namespace TheSocialMediaV2.Migrations
                     b.ToTable("Matches");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.Message", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Message", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -105,7 +105,7 @@ namespace TheSocialMediaV2.Migrations
                     b.ToTable("Messages");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.Report", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Report", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -134,7 +134,7 @@ namespace TheSocialMediaV2.Migrations
                     b.ToTable("Reports");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.User", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -167,7 +167,7 @@ namespace TheSocialMediaV2.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.Entities.UserProfile", b =>
+            modelBuilder.Entity("TheSocialMediaV2.API.Entities.UserProfile", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()

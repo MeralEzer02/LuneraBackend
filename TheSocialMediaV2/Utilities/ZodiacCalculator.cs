@@ -1,7 +1,7 @@
 ﻿using System;
-using TheSocialMediaV2.Enums; // Enum'ları buradan çekecek
+using TheSocialMediaV2.API.Enums; // Enum'ları buradan çekecek
 
-namespace TheSocialMediaV2.Utilities
+namespace TheSocialMediaV2.API.Utilities
 {
     public static class ZodiacCalculator
     {
