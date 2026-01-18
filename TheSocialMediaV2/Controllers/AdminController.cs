@@ -10,7 +10,7 @@ namespace TheSocialMediaV2.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Roles = "Admin")]
-    public class AdminController : ControllerBase
+    public class AdminController : ControllerBase 
     {
         private readonly AppDbContext _context;
 
