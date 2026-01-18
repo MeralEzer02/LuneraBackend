@@ -1,4 +1,4 @@
-﻿using System;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TheSocialMediaV2.API.Entities
 {
@@ -8,13 +8,26 @@ namespace TheSocialMediaV2.API.Entities
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
 
-        // 0: Admin, 1: User
         public int RoleId { get; set; }
-
-        // 0: Passive, 1: Active, 2: Banned (Enum ile yönetilecek)
         public int Status { get; set; }
+        public int WarningCount { get; set; }
+        public DateTime CreatedAt { get; set; }
 
-        public int WarningCount { get; set; } = 0;
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        // --- İLİŞKİLER (NAVIGATIONS) ---
+
+        // 1. Profil İlişkisi
+        public virtual UserProfile UserProfile { get; set; }
+
+        // 2. Kullanıcının "UserA" (Başlatan) olduğu eşleşmeler
+        [InverseProperty("UserA")]
+        public virtual ICollection<Match> MatchesAsUserA { get; set; }
+
+        // 3. Kullanıcının "UserB" (Diğer taraf) olduğu eşleşmeler
+        [InverseProperty("UserB")]
+        public virtual ICollection<Match> MatchesAsUserB { get; set; }
+
+        // 4. Kullanıcının gönderdiği mesajlar
+        [InverseProperty("Sender")]
+        public virtual ICollection<Message> SentMessages { get; set; }
     }
 }
