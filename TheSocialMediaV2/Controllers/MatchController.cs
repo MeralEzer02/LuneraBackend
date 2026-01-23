@@ -52,7 +52,7 @@ namespace TheSocialMediaV2.API.Controllers
             var luckyWinner = candidates[random.Next(candidates.Count)];
 
             var newMatch = new Match
-            {
+            {  
                 UserAId = myId,
                 UserBId = luckyWinner.Id,
                 CreatedAt = DateTime.Now,
