@@ -5,6 +5,7 @@ using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Entities;
 using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.API.DTOs;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -33,9 +34,7 @@ namespace TheSocialMediaV2.API.Controllers
                 .Select(m => m.UserAId == myId ? m.UserBId : m.UserAId)
                 .ToListAsync();
 
-            // 3. Aday Havuzunu Oluştur (Kendim hariç, Banlılar hariç, Eskiler hariç)
-            // Not: Gerçek hayatta bu sorgu "UserProfile" üzerinden cinsiyet filtresiyle yapılır.
-            // Şimdilik MVP gereği rastgele getiriyoruz.
+            // 3. Aday Havuzunu Oluştur
             var candidates = await _context.Users
                 .Where(u => u.Id != myId &&
                             u.Status == 1 &&
@@ -52,7 +51,7 @@ namespace TheSocialMediaV2.API.Controllers
             var luckyWinner = candidates[random.Next(candidates.Count)];
 
             var newMatch = new Match
-            {  
+            {
                 UserAId = myId,
                 UserBId = luckyWinner.Id,
                 CreatedAt = DateTime.Now,
@@ -62,18 +61,20 @@ namespace TheSocialMediaV2.API.Controllers
             _context.Matches.Add(newMatch);
             await _context.SaveChangesAsync();
 
-            return Ok(new
+            var result = new MatchResultDto
             {
-                Message = "Eşleşme Başarılı! 🎉",
                 MatchId = newMatch.Id,
-                MatchedUser = new
+                Message = "Eşleşme Başarılı! 🎉",
+                MatchedUser = new MatchedUserDto
                 {
                     Id = luckyWinner.Id,
                     Nickname = luckyWinner.UserProfile?.Nickname ?? "Anonim",
                     RealName = luckyWinner.UserProfile?.RealName,
                     Bio = luckyWinner.UserProfile?.Bio
                 }
-            });
+            };
+
+            return Ok(result);
         }
     }
 }
