@@ -29,5 +29,15 @@ namespace TheSocialMediaV2.API.Entities
         // 4. Kullanıcının gönderdiği mesajlar
         [InverseProperty("Sender")]
         public virtual ICollection<Message> SentMessages { get; set; }
+
+        // --- ADMIN LOG İLİŞKİLERİ ---
+
+        // 1. Bu kullanıcının ADMIN sıfatıyla yaptığı işlemler (Eğer adminse)
+        [InverseProperty("AdminUser")]
+        public virtual ICollection<AdminActionLog> ActionsAsAdmin { get; set; }
+
+        // 2. Bu kullanıcıya YAPILAN işlemler (Banlandı, uyarıldı vb.)
+        [InverseProperty("TargetUser")]
+        public virtual ICollection<AdminActionLog> ActionsAsTarget { get; set; }
     }
 }

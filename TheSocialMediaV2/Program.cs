@@ -19,6 +19,8 @@ builder.Host.UseSerilog((context, configuration) =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddControllers();
+// Servis Kayýtlarý
+builder.Services.AddScoped<TheSocialMediaV2.API.Services.IAdminActionLogger, TheSocialMediaV2.API.Services.AdminActionLogger>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
