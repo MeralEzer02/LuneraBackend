@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Enums;
-using TheSocialMediaV2.API.Services; // <-- Servis için bunu ekledik
+using TheSocialMediaV2.API.Services;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -14,9 +14,8 @@ namespace TheSocialMediaV2.API.Controllers
     public class AdminController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly IAdminActionLogger _logger; // <-- LOG SERVİSİ
+        private readonly IAdminActionLogger _logger;
 
-        // Constructor Injection: Servisi içeri alıyoruz
         public AdminController(AppDbContext context, IAdminActionLogger logger)
         {
             _context = context;
@@ -38,7 +37,7 @@ namespace TheSocialMediaV2.API.Controllers
             return Ok(stats);
         }
 
-        // 2. KULLANICI BANLAMA
+        // 2. KULLANICI BANLAMA (Transaction Korumalı)
         [HttpPost("ban-user/{userId}")]
         public async Task<IActionResult> BanUser(int userId)
         {
@@ -55,18 +54,36 @@ namespace TheSocialMediaV2.API.Controllers
 
             if (adminId == userId) return BadRequest("Yöneticiler kendilerini yasaklayamaz.");
 
-            // D. İşlemi Uygula (Önce işlemi yapıp kaydediyoruz)
-            userToBan.Status = 2; // 2: Banned
-            await _context.SaveChangesAsync(); // Ban durumu DB'ye işlendi.
+            // --- TRANSACTION BAŞLANGICI ---
+            // Veri tabanında bir işlem paketi başlatıyoruz.
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // D. İşlemi Uygula
+                userToBan.Status = 2; // 2: Banned
+                await _context.SaveChangesAsync(); // SQL'e gider ama COMMIT edilmezse kalıcı olmaz.
 
-            // E. LOGLAMA (Artık tek satır!)
-            // Servis arka planda logu kaydedecek.
-            await _logger.LogAsync(adminId, AdminActionType.UserBan, "Manuel Ban İşlemi", userId);
+                // E. LOGLAMA
+                // Logger da aynı context'i kullandığı için bu transaction'a dahildir.
+                await _logger.LogAsync(adminId, AdminActionType.UserBan, "Manuel Ban İşlemi", userId);
+
+                // F. TAAHHÜT ET (COMMIT)
+                // Buraya kadar hata çıkmadıysa paketi onayla ve kaydet.
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                // HATA OLURSA GERİ AL (ROLLBACK)
+                // Log yazılırken hata olsa bile kullanıcı banlanmamış gibi eski haline döner.
+                await transaction.RollbackAsync();
+                throw; // Hatayı fırlat (500 Error dönmesi için)
+            }
+            // --- TRANSACTION BİTİŞİ ---
 
             return Ok(new { message = $"Kullanıcı (ID: {userId}) yasaklandı." });
         }
 
-        // 3. BAN KALDIRMA (UNBAN) - YENİ ÖZELLİK
+        // 3. BAN KALDIRMA (UNBAN) - (Transaction Korumalı)
         [HttpPost("unban-user/{userId}")]
         public async Task<IActionResult> UnbanUser(int userId)
         {
@@ -77,15 +94,30 @@ namespace TheSocialMediaV2.API.Controllers
             // B. Zaten aktif mi?
             if (userToUnban.Status == 1) return BadRequest("Kullanıcı zaten aktif.");
 
-            // C. İşlemi Uygula
-            userToUnban.Status = 1; // 1: Active
-            await _context.SaveChangesAsync();
+            // --- TRANSACTION BAŞLANGICI ---
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // C. İşlemi Uygula
+                userToUnban.Status = 1; // 1: Active
+                await _context.SaveChangesAsync();
 
-            // D. LOGLAMA
-            var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            int adminId = int.Parse(adminIdStr!);
+                // D. LOGLAMA
+                var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                int adminId = int.Parse(adminIdStr!);
 
-            await _logger.LogAsync(adminId, AdminActionType.UserUnban, "Manuel Ban Kaldırma", userId);
+                await _logger.LogAsync(adminId, AdminActionType.UserUnban, "Manuel Ban Kaldırma", userId);
+
+                // E. COMMIT
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                // ROLLBACK
+                await transaction.RollbackAsync();
+                throw;
+            }
+            // --- TRANSACTION BİTİŞİ ---
 
             return Ok(new { message = $"Kullanıcının (ID: {userId}) yasağı kaldırıldı." });
         }
