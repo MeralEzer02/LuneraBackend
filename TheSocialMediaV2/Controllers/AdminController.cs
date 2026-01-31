@@ -199,5 +199,5 @@ namespace TheSocialMediaV2.API.Controllers
             var resultMsg = dto.IsAccepted ? "Şikayet KABUL edildi." : "Şikayet REDDEDİLDİ.";
             return Ok(new { message = $"{resultMsg} İşlem kaydedildi." });
         }
-    }
+    }   
 }
