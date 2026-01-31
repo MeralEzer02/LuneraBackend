@@ -64,6 +64,32 @@ namespace TheSocialMediaV2.API.Data
                 entity.Property(e => e.ActionType)
                     .HasConversion<int>();
             });
+
+            // --- REPORT KURALLARI ---
+            modelBuilder.Entity<Report>(entity =>
+            {
+                // 1. Şikayet Eden Silinirse Rapor Silinmesin (Delil kalsın)
+                entity.HasOne(r => r.Reporter)
+                    .WithMany()
+                    .HasForeignKey(r => r.ReporterId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 2. Şikayet Edilen Silinirse Rapor Silinmesin
+                entity.HasOne(r => r.ReportedUser)
+                    .WithMany()
+                    .HasForeignKey(r => r.ReportedUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 3. Karar Veren Admin Silinirse Rapor Silinmesin
+                entity.HasOne(r => r.ProcessedByAdmin)
+                    .WithMany()
+                    .HasForeignKey(r => r.ProcessedByAdminId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 4. Enum Dönüşümü
+                entity.Property(r => r.Status)
+                    .HasConversion<int>();
+            });
         }
     }
 }

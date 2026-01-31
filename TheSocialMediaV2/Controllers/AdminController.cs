@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
+using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.API.Enums;
 using TheSocialMediaV2.API.Services;
 
@@ -120,6 +121,83 @@ namespace TheSocialMediaV2.API.Controllers
             // --- TRANSACTION BİTİŞİ ---
 
             return Ok(new { message = $"Kullanıcının (ID: {userId}) yasağı kaldırıldı." });
+        }
+
+        // 4. BEKLEYEN ŞİKAYETLERİ GETİR
+        // GET: api/admin/reports/pending
+        [HttpGet("reports/pending")]
+        public async Task<IActionResult> GetPendingReports()
+        {
+            var reports = await _context.Reports
+                .Where(r => r.Status == ReportStatus.Pending)
+                .Include(r => r.Reporter)      // Şikayet eden
+                .Include(r => r.ReportedUser)  // Şikayet edilen
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new
+                {
+                    r.Id,
+                    ReporterName = r.Reporter.UserProfile != null ? r.Reporter.UserProfile.Nickname : "Anonim",
+                    ReportedUserName = r.ReportedUser.UserProfile != null ? r.ReportedUser.UserProfile.Nickname : "Anonim",
+                    ReportedUserId = r.ReportedUserId,
+                    r.Reason,
+                    r.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(reports);
+        }
+
+        // 5. ŞİKAYETİ SONUÇLANDIR (Transaction & Loglu)
+        // POST: api/admin/resolve-report
+        [HttpPost("resolve-report")]
+        public async Task<IActionResult> ResolveReport([FromBody] ResolveReportDto dto)
+        {
+            // A. Raporu Bul
+            var report = await _context.Reports.FindAsync(dto.ReportId);
+            if (report == null) return NotFound("Rapor bulunamadı.");
+
+            // B. Zaten çözülmüş mü?
+            if (report.Status != ReportStatus.Pending)
+                return BadRequest("Bu rapor zaten sonuçlandırılmış.");
+
+            // C. Admin Kimliği
+            var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            int adminId = int.Parse(adminIdStr!);
+
+            // --- TRANSACTION BAŞLANGICI ---
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // D. Raporu Güncelle
+                report.Status = dto.IsAccepted ? ReportStatus.Accepted : ReportStatus.Rejected;
+                report.AdminNotes = dto.AdminNotes;
+                report.ProcessedByAdminId = adminId;
+                report.ProcessedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                // E. LOGLAMA (Karara göre log tipi değişir)
+                var actionType = dto.IsAccepted ? AdminActionType.ReportAccepted : AdminActionType.ReportRejected;
+
+                await _logger.LogAsync(
+                    adminId,
+                    actionType,
+                    $"Rapor Sonuçlandı: {dto.AdminNotes}",
+                    report.ReportedUserId // Hedef: Şikayet edilen kişi
+                );
+
+                // F. COMMIT
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            // --- TRANSACTION BİTİŞİ ---
+
+            var resultMsg = dto.IsAccepted ? "Şikayet KABUL edildi." : "Şikayet REDDEDİLDİ.";
+            return Ok(new { message = $"{resultMsg} İşlem kaydedildi." });
         }
     }
 }
