@@ -15,6 +15,7 @@ namespace TheSocialMediaV2.API.Data
         public DbSet<Message> Messages { get; set; }
         public DbSet<Report> Reports { get; set; }
         public DbSet<AdminActionLog> AdminActionLogs { get; set; }
+        public DbSet<UserBan> UserBans { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -89,6 +90,35 @@ namespace TheSocialMediaV2.API.Data
                 // 4. Enum Dönüşümü
                 entity.Property(r => r.Status)
                     .HasConversion<int>();
+            });
+
+
+            // --- USER BAN KURALLARI (IMMUTABLE HISTORY) ---
+            modelBuilder.Entity<UserBan>(entity =>
+            {
+                // 1. Cezalı Kullanıcı Silinirse Ban Kaydı SİLİNMEZ
+                entity.HasOne(b => b.User)
+                    .WithMany(u => u.BansReceived)
+                    .HasForeignKey(b => b.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 2. Banı Atan Admin Silinirse Ban Kaydı SİLİNMEZ
+                entity.HasOne(b => b.IssuedByAdmin)
+                    .WithMany(u => u.BansIssued)
+                    .HasForeignKey(b => b.IssuedByAdminId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 3. Banı Kaldıran Admin Silinirse Kayıt SİLİNMEZ
+                entity.HasOne(b => b.UnbannedByAdmin)
+                    .WithMany()
+                    .HasForeignKey(b => b.UnbannedByAdminId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 4. Dayanak Rapor Silinirse Ban Kaydı SİLİNMEZ
+                entity.HasOne(b => b.Report)
+                    .WithMany()
+                    .HasForeignKey(b => b.ReportId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

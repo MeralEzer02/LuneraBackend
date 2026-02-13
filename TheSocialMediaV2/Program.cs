@@ -95,6 +95,8 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 
+app.UseMiddleware<TheSocialMediaV2.API.Middlewares.BanCheckMiddleware>();
+
 app.UseAuthorization();
 
 app.MapControllers();

@@ -39,5 +39,15 @@ namespace TheSocialMediaV2.API.Entities
         // 2. Bu kullanıcıya YAPILAN işlemler (Banlandı, uyarıldı vb.)
         [InverseProperty("TargetUser")]
         public virtual ICollection<AdminActionLog> ActionsAsTarget { get; set; }
+        
+        // --- BAN İLİŞKİLERİ ---
+
+        // 1. Yediği Banlar (Sabıka Kaydı)
+        [InverseProperty("User")]
+        public virtual ICollection<UserBan> BansReceived { get; set; }
+
+        // 2. Attığı Banlar (Yargıç Kaydı)
+        [InverseProperty("IssuedByAdmin")]
+        public virtual ICollection<UserBan> BansIssued { get; set; }
     }
 }
