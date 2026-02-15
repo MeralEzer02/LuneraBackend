@@ -54,7 +54,7 @@ namespace TheSocialMediaV2.API.Controllers
                     PasswordHash = PasswordHasher.HashPassword(request.Password),
                     RoleId = 1,
                     Status = 1,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = DateTime.UtcNow, // Best Practice: UtcNow
                     WarningCount = 0
                 };
 
@@ -90,35 +90,58 @@ namespace TheSocialMediaV2.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto request)
         {
+            // 1. Kullanıcıyı Bul
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (user == null)
             {
                 return Unauthorized("E-posta veya şifre hatalı.");
             }
 
+            // 2. Şifre Kontrolü
             var inputHash = PasswordHasher.HashPassword(request.Password);
             if (user.PasswordHash != inputHash)
             {
                 return Unauthorized("E-posta veya şifre hatalı.");
             }
 
+            // 3. Basit Status Kontrolü (Legacy)
             if (user.Status == 2)
             {
-                return StatusCode(403, "Hesabınız yasaklanmıştır.");
+                return StatusCode(403, new { message = "Hesabınız yasaklanmıştır." });
             }
 
+            // 4. 🛑 KRİTİK GÜVENLİK KONTROLÜ (A3.3 - Deep Ban Check)
+            // Token üretmeden önce, veritabanında aktif ve kapanmamış bir ban dosyası var mı?
+            // Bu kontrol, Admin panelinden atılan süreli banların Login anında yakalanmasını sağlar.
+            bool hasActiveBan = await _context.UserBans
+                .AsNoTracking()
+                .AnyAsync(b => b.UserId == user.Id
+                          && b.UnbannedAt == null
+                          && (b.BanUntil == null || b.BanUntil > DateTime.UtcNow));
+
+            if (hasActiveBan)
+            {
+                // Eğer status güncel değilse onu da düzeltelim (Self-Healing)
+                if (user.Status != 2)
+                {
+                    user.Status = 2;
+                    await _context.SaveChangesAsync();
+                }
+
+                return StatusCode(403, new { message = "Hesabınızda aktif bir yasaklama bulunmaktadır. Oturum açılamaz." });
+            }
+
+            // 5. Her şey temizse Token ver
             var token = GenerateJwtToken(user);
 
             return Ok(new { token = token });
         }
 
         // GET: api/auth/my-profile
-        // [Authorize] etiketi: "Sadece token'ı olan ve geçerli olanlar girebilir" demektir.
-        [Authorize] // <-- YENİ EKLENEN METOT
+        [Authorize]
         [HttpGet("my-profile")]
         public IActionResult GetMyProfile()
         {
-            // Token'ın içindeki bilgileri okuyoruz (User.Claims)
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var email = User.FindFirst(ClaimTypes.Email)?.Value;
             var role = User.FindFirst(ClaimTypes.Role)?.Value;
@@ -129,7 +152,7 @@ namespace TheSocialMediaV2.API.Controllers
                 id = userId,
                 email = email,
                 role = role,
-                serverTime = DateTime.Now
+                serverTime = DateTime.UtcNow
             });
         }
 
@@ -155,7 +178,7 @@ namespace TheSocialMediaV2.API.Controllers
                 issuer: jwtSettings["Issuer"],
                 audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddDays(7),
+                expires: DateTime.UtcNow.AddDays(7), // Best Practice: UtcNow
                 signingCredentials: creds
             );
 

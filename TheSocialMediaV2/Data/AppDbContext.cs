@@ -16,6 +16,7 @@ namespace TheSocialMediaV2.API.Data
         public DbSet<Report> Reports { get; set; }
         public DbSet<AdminActionLog> AdminActionLogs { get; set; }
         public DbSet<UserBan> UserBans { get; set; }
+        public DbSet<UserAbuseMetric> UserAbuseMetrics { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -118,6 +119,23 @@ namespace TheSocialMediaV2.API.Data
                 entity.HasOne(b => b.Report)
                     .WithMany()
                     .HasForeignKey(b => b.ReportId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<UserBan>()
+                .HasIndex(b => b.UserId)
+                .IsUnique()
+                .HasFilter("[UnbannedAt] IS NULL");
+
+            // A3.4 - USER ABUSE METRIC AYARLARI
+            modelBuilder.Entity<UserAbuseMetric>(entity =>
+            {
+                entity.HasKey(m => m.UserId);
+
+                // User silinirse istihbarat dosyası silinmez! (Restrict)
+                entity.HasOne(m => m.User)
+                    .WithOne()
+                    .HasForeignKey<UserAbuseMetric>(m => m.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
         }
