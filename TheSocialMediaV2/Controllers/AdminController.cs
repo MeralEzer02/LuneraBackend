@@ -6,6 +6,7 @@ using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.API.Entities;
 using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.API.Events;
 using TheSocialMediaV2.API.Services;
 
 namespace TheSocialMediaV2.API.Controllers
@@ -17,11 +18,13 @@ namespace TheSocialMediaV2.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IAdminActionLogger _logger;
+        private readonly IDomainEventDispatcher _dispatcher;
 
-        public AdminController(AppDbContext context, IAdminActionLogger logger)
+        public AdminController(AppDbContext context, IAdminActionLogger logger, IDomainEventDispatcher dispatcher)
         {
             _context = context;
             _logger = logger;
+            _dispatcher = dispatcher;
         }
 
         // 1. SİSTEM İSTATİSTİKLERİ
@@ -39,7 +42,7 @@ namespace TheSocialMediaV2.API.Controllers
             return Ok(stats);
         }
 
-        // 2. KULLANICI BANLAMA (UserBan Tablosuna Yazan Versiyon)
+        // 2. KULLANICI BANLAMA (Event Driven)
         [HttpPost("ban-user/{userId}")]
         public async Task<IActionResult> BanUser(int userId, [FromBody] BanUserDto dto)
         {
@@ -47,7 +50,7 @@ namespace TheSocialMediaV2.API.Controllers
             var userToBan = await _context.Users.FindAsync(userId);
             if (userToBan == null) return NotFound("Kullanıcı bulunamadı.");
 
-            // B. Zaten aktif bir banı var mı? (GERÇEK KONTROL)
+            // B. Zaten aktif bir banı var mı?
             bool isAlreadyBanned = await _context.UserBans.AnyAsync(b =>
                 b.UserId == userId &&
                 b.UnbannedAt == null &&
@@ -55,7 +58,6 @@ namespace TheSocialMediaV2.API.Controllers
 
             if (isAlreadyBanned) return BadRequest("Kullanıcının zaten aktif bir yasağı var.");
 
-            // C. Admin Kimliği
             var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int adminId = int.Parse(adminIdStr!);
 
@@ -65,7 +67,7 @@ namespace TheSocialMediaV2.API.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // D. OTOMATİK RAPOR OLUŞTUR (EK-6 Kuralı)
+                // D. OTOMATİK RAPOR
                 var autoReport = new Report
                 {
                     ReporterId = adminId,
@@ -80,7 +82,7 @@ namespace TheSocialMediaV2.API.Controllers
                 _context.Reports.Add(autoReport);
                 await _context.SaveChangesAsync();
 
-                // E. USER BAN KAYDI OLUŞTUR
+                // E. USER BAN KAYDI
                 var userBan = new UserBan
                 {
                     UserId = userId,
@@ -94,15 +96,20 @@ namespace TheSocialMediaV2.API.Controllers
                 };
                 _context.UserBans.Add(userBan);
 
-                // F. USER TABLOSUNU GÜNCELLE
+                // F. USER UPDATE
                 userToBan.Status = 2;
-
                 await _context.SaveChangesAsync();
 
                 // G. LOGLAMA
                 await _logger.LogAsync(adminId, AdminActionType.UserBan, $"Ban: {dto.Reason}", userId);
 
-                // H. COMMIT
+                //  H. EVENT FIRLATMA (SİNİR SİSTEMİ DEVREDE) 
+                // Bu satır çalıştığında, UserBannedEventHandler otomatik olarak uyanacak
+                // ve UserAbuseMetrics tablosunu güncelleyip Risk Skorunu hesaplayacak.
+                var domainEvent = new UserBannedEvent(userId, dto.DurationInDays, dto.Reason);
+                await _dispatcher.Dispatch(domainEvent);
+
+                // I. COMMIT
                 await transaction.CommitAsync();
             }
             catch (Exception)
@@ -113,27 +120,22 @@ namespace TheSocialMediaV2.API.Controllers
             // --- TRANSACTION BİTİŞİ ---
 
             string sureBilgisi = dto.DurationInDays.HasValue ? $"{dto.DurationInDays} gün" : "SONSUZ";
-            return Ok(new { message = $"Kullanıcı yasaklandı. Süre: {sureBilgisi}" });
+            return Ok(new { message = $"Kullanıcı yasaklandı. Süre: {sureBilgisi}. Risk skoru güncellendi." });
         }
 
-        // 3. BAN KALDIRMA (UNBAN) - (Profesyonel & Varsayımsız)
+        // 3. BAN KALDIRMA
         [HttpPost("unban-user/{userId}")]
         public async Task<IActionResult> UnbanUser(int userId)
         {
-            // A. Kullanıcıyı bul
             var userToUnban = await _context.Users.FindAsync(userId);
             if (userToUnban == null) return NotFound("Kullanıcı bulunamadı.");
 
-            // C. Admin Kimliği
             var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int adminId = int.Parse(adminIdStr!);
 
-            // --- TRANSACTION BAŞLANGICI ---
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // B. AKTİF BAN KAYDINI BUL (GERÇEK KONTROL)
-                // Varsayım yok. Veritabanına soruyoruz: "Bu adamın kapanmamış dosyası var mı?"
                 var activeBan = await _context.UserBans
                     .Where(b => b.UserId == userId &&
                                 b.UnbannedAt == null &&
@@ -141,33 +143,25 @@ namespace TheSocialMediaV2.API.Controllers
                     .OrderByDescending(b => b.CreatedAt)
                     .FirstOrDefaultAsync();
 
-                // Eğer aktif bir ban yoksa VE kullanıcı zaten aktifse, işlem yapmaya gerek yok.
                 if (activeBan == null && userToUnban.Status == 1)
                 {
-                    // Transaction boşuna açıldı ama veri bütünlüğü için okuma yaptık, sorun yok.
                     return BadRequest("Kullanıcı zaten aktif ve kaldırılacak bir yasak bulunamadı.");
                 }
 
-                string logDetails = "Manuel Statü Düzeltme"; // Default mesaj
+                string logDetails = "Manuel Statü Düzeltme";
 
-                // Dosya varsa kapatıyoruz (Af Damgası)
                 if (activeBan != null)
                 {
                     activeBan.UnbannedAt = DateTime.UtcNow;
                     activeBan.UnbannedByAdminId = adminId;
-
-                    // Profesyonel Log Mesajı: Hangi Ban ID'sinin kapatıldığını not alıyoruz.
                     logDetails = $"Ban Kaldırıldı (Ref Ban ID: {activeBan.Id})";
                 }
 
-                // D. USER TABLOSUNU GÜNCELLE
-                userToUnban.Status = 1; // 1: Active
+                userToUnban.Status = 1;
                 await _context.SaveChangesAsync();
 
-                // E. LOGLAMA (Detaylı)
                 await _logger.LogAsync(adminId, AdminActionType.UserUnban, logDetails, userId);
 
-                // F. COMMIT
                 await transaction.CommitAsync();
             }
             catch (Exception)
@@ -175,12 +169,11 @@ namespace TheSocialMediaV2.API.Controllers
                 await transaction.RollbackAsync();
                 throw;
             }
-            // --- TRANSACTION BİTİŞİ ---
 
             return Ok(new { message = $"Kullanıcının (ID: {userId}) yasağı kaldırıldı." });
         }
 
-        // 4. BEKLEYEN ŞİKAYETLERİ GETİR
+        // 4. BEKLEYEN ŞİKAYETLER
         [HttpGet("reports/pending")]
         public async Task<IActionResult> GetPendingReports()
         {
@@ -203,7 +196,7 @@ namespace TheSocialMediaV2.API.Controllers
             return Ok(reports);
         }
 
-        // 5. ŞİKAYETİ SONUÇLANDIR
+        // 5. ŞİKAYET SONUÇLANDIR
         [HttpPost("resolve-report")]
         public async Task<IActionResult> ResolveReport([FromBody] ResolveReportDto dto)
         {

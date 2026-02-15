@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Serilog;
+using TheSocialMediaV2.API.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,12 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<TheSocialMediaV2.API.Services.IAdminActionLogger, TheSocialMediaV2.API.Services.AdminActionLogger>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
+
+// --- EVENT LAYER ---
+builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+
+// Handler'larý tek tek kaydediyoruz
+builder.Services.AddScoped<IDomainEventHandler<UserBannedEvent>, UserBannedEventHandler>();
 
 // Swagger Ayarlarý (JWT Desteði ile)
 builder.Services.AddSwaggerGen(option =>
