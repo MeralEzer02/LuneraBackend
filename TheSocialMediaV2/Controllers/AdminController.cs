@@ -42,7 +42,7 @@ namespace TheSocialMediaV2.API.Controllers
             return Ok(stats);
         }
 
-        // 2. KULLANICI BANLAMA (Event Driven)
+        // 2. KULLANICI BANLAMA (Fintech Grade: Serializable + Retry Strategy)
         [HttpPost("ban-user/{userId}")]
         public async Task<IActionResult> BanUser(int userId, [FromBody] BanUserDto dto)
         {
@@ -50,77 +50,87 @@ namespace TheSocialMediaV2.API.Controllers
             var userToBan = await _context.Users.FindAsync(userId);
             if (userToBan == null) return NotFound("Kullanıcı bulunamadı.");
 
-            // B. Zaten aktif bir banı var mı?
+            // B. Ön Kontrol
             bool isAlreadyBanned = await _context.UserBans.AnyAsync(b =>
                 b.UserId == userId &&
                 b.UnbannedAt == null &&
                 (b.BanUntil == null || b.BanUntil > DateTime.UtcNow));
 
-            if (isAlreadyBanned) return BadRequest("Kullanıcının zaten aktif bir yasağı var.");
+            if (isAlreadyBanned) return Conflict(new { message = "Kullanıcının zaten aktif bir yasağı var." });
 
             var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int adminId = int.Parse(adminIdStr!);
 
             if (adminId == userId) return BadRequest("Yöneticiler kendilerini yasaklayamaz.");
 
-            // --- TRANSACTION BAŞLANGICI ---
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            // --- RETRY STRATEGY ---
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            // CS8031 Hatası için <IActionResult> eklendi
+            return await strategy.ExecuteAsync<IActionResult>(async () =>
             {
-                // D. OTOMATİK RAPOR
-                var autoReport = new Report
+                using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
                 {
-                    ReporterId = adminId,
-                    ReportedUserId = userId,
-                    Reason = "Doğrudan Admin İşlemi: " + dto.Reason,
-                    Status = ReportStatus.Accepted,
-                    AdminNotes = "Doğrudan ban uygulandı.",
-                    ProcessedByAdminId = adminId,
-                    ProcessedAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.Reports.Add(autoReport);
-                await _context.SaveChangesAsync();
+                    // D. Rapor
+                    var autoReport = new Report
+                    {
+                        ReporterId = adminId,
+                        ReportedUserId = userId,
+                        Reason = "Doğrudan Admin İşlemi: " + dto.Reason,
+                        Status = ReportStatus.Accepted,
+                        AdminNotes = "Doğrudan ban uygulandı.",
+                        ProcessedByAdminId = adminId,
+                        ProcessedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Reports.Add(autoReport);
+                    await _context.SaveChangesAsync();
 
-                // E. USER BAN KAYDI
-                var userBan = new UserBan
+                    // E. Ban Kaydı
+                    var userBan = new UserBan(
+                        userId,
+                        autoReport.Id,
+                        adminId,
+                        dto.Reason,
+                        dto.DurationInDays
+                    );
+
+                    _context.UserBans.Add(userBan);
+
+                    // F. User Update
+                    if (userToBan != null) userToBan.Status = 2;
+
+                    await _context.SaveChangesAsync();
+
+                    // G. Log
+                    await _logger.LogAsync(adminId, AdminActionType.UserBan, $"Ban: {dto.Reason}", userId);
+
+                    // H. Event
+                    var domainEvent = new UserBannedEvent(userId, dto.DurationInDays, dto.Reason);
+                    await _dispatcher.Dispatch(domainEvent);
+
+                    // I. Commit
+                    await transaction.CommitAsync();
+
+                    string sureBilgisi = dto.DurationInDays.HasValue ? $"{dto.DurationInDays} gün" : "SONSUZ";
+                    return Ok(new { message = $"Kullanıcı yasaklandı. Süre: {sureBilgisi}. Risk skoru güncellendi." });
+                }
+                catch (DbUpdateException ex)
                 {
-                    UserId = userId,
-                    ReportId = autoReport.Id,
-                    IssuedByAdminId = adminId,
-                    Reason = dto.Reason,
-                    CreatedAt = DateTime.UtcNow,
-                    BanUntil = dto.DurationInDays.HasValue
-                        ? DateTime.UtcNow.AddDays(dto.DurationInDays.Value)
-                        : null
-                };
-                _context.UserBans.Add(userBan);
-
-                // F. USER UPDATE
-                userToBan.Status = 2;
-                await _context.SaveChangesAsync();
-
-                // G. LOGLAMA
-                await _logger.LogAsync(adminId, AdminActionType.UserBan, $"Ban: {dto.Reason}", userId);
-
-                //  H. EVENT FIRLATMA (SİNİR SİSTEMİ DEVREDE) 
-                // Bu satır çalıştığında, UserBannedEventHandler otomatik olarak uyanacak
-                // ve UserAbuseMetrics tablosunu güncelleyip Risk Skorunu hesaplayacak.
-                var domainEvent = new UserBannedEvent(userId, dto.DurationInDays, dto.Reason);
-                await _dispatcher.Dispatch(domainEvent);
-
-                // I. COMMIT
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-            // --- TRANSACTION BİTİŞİ ---
-
-            string sureBilgisi = dto.DurationInDays.HasValue ? $"{dto.DurationInDays} gün" : "SONSUZ";
-            return Ok(new { message = $"Kullanıcı yasaklandı. Süre: {sureBilgisi}. Risk skoru güncellendi." });
+                    await transaction.RollbackAsync();
+                    if (ex.InnerException != null && ex.InnerException.Message.Contains("IX_UserBans_UserId"))
+                    {
+                        return Conflict(new { message = "Veri Çakışması: Bu kullanıcının zaten aktif bir yasağı var (DB Constraint)." });
+                    }
+                    throw;
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         // 3. BAN KALDIRMA
@@ -133,7 +143,7 @@ namespace TheSocialMediaV2.API.Controllers
             var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int adminId = int.Parse(adminIdStr!);
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
                 var activeBan = await _context.UserBans
@@ -152,8 +162,7 @@ namespace TheSocialMediaV2.API.Controllers
 
                 if (activeBan != null)
                 {
-                    activeBan.UnbannedAt = DateTime.UtcNow;
-                    activeBan.UnbannedByAdminId = adminId;
+                    activeBan.Revoke(adminId);
                     logDetails = $"Ban Kaldırıldı (Ref Ban ID: {activeBan.Id})";
                 }
 
@@ -177,6 +186,7 @@ namespace TheSocialMediaV2.API.Controllers
         [HttpGet("reports/pending")]
         public async Task<IActionResult> GetPendingReports()
         {
+            // HATANIN KAYNAĞI BURADAYDI: Parantez ve virgül hatası giderildi.
             var reports = await _context.Reports
                 .Where(r => r.Status == ReportStatus.Pending)
                 .Include(r => r.Reporter)

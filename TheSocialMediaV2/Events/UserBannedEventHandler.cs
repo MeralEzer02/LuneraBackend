@@ -2,6 +2,7 @@
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Entities;
 using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Events
 {
@@ -16,7 +17,15 @@ namespace TheSocialMediaV2.API.Events
 
         public async Task Handle(UserBannedEvent domainEvent)
         {
-            // 1. Kullanıcının Metric kaydını bul veya oluştur
+            bool isAlreadyProcessed = await _context.ProcessedEvents
+                .AnyAsync(e => e.EventId == domainEvent.EventId);
+
+            if (isAlreadyProcessed)
+            {
+                return;
+            }
+
+            // 1. Metric Bul/Oluştur
             var metric = await _context.UserAbuseMetrics
                 .FirstOrDefaultAsync(m => m.UserId == domainEvent.UserId);
 
@@ -29,19 +38,20 @@ namespace TheSocialMediaV2.API.Events
             // 2. İstatistikleri Güncelle
             metric.TotalBans++;
             metric.LastBanDate = domainEvent.OccurredOn;
-
-            // 3. Skor Hesaplama (Basit bir algoritma)
-            // Her ban 20 puan risk artırır
             metric.AbuseScore += 20;
-
-            // 4. Risk Seviyesi Belirleme (Escalation Policy)
             metric.RiskLevel = CalculateRiskLevel(metric.AbuseScore, metric.TotalBans);
-
             metric.LastUpdated = DateTime.UtcNow;
+
+            // 3. OLAYI "İŞLENDİ" OLARAK İŞARETLE (Ledger Entry)
+            _context.ProcessedEvents.Add(new ProcessedEvent
+            {
+                EventId = domainEvent.EventId,
+                EventType = nameof(UserBannedEvent),
+                ProcessedAt = DateTime.UtcNow
+            });
 
             await _context.SaveChangesAsync();
         }
-
         private RiskLevel CalculateRiskLevel(int score, int totalBans)
         {
             if (totalBans >= 3 || score >= 100) return RiskLevel.Critical;

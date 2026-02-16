@@ -5,59 +5,64 @@ namespace TheSocialMediaV2.API.Entities
 {
     public class UserBan
     {
-        public int Id { get; set; }
+        protected UserBan() { }
 
-        // 1. CEZALI (Target)
+        public UserBan(int userId, int reportId, int issuedByAdminId, string reason, int? durationDays)
+        {
+            UserId = userId;
+            ReportId = reportId;
+            IssuedByAdminId = issuedByAdminId;
+            Reason = reason;
+            CreatedAt = DateTime.UtcNow;
+
+            BanUntil = durationDays.HasValue ? DateTime.UtcNow.AddDays(durationDays.Value) : null;
+        }
+
+        public int Id { get; private set; }
+
         [Required]
-        public int UserId { get; set; }
+        public int UserId { get; private set; }
 
         [ForeignKey("UserId")]
-        public virtual User User { get; set; }
+        public virtual User User { get; private set; }
 
-        // 2. DAYANAK (Evidence)
         [Required]
-        public int ReportId { get; set; }
+        public int ReportId { get; private set; } 
 
         [ForeignKey("ReportId")]
-        public virtual Report Report { get; set; }
+        public virtual Report Report { get; private set; }
 
-        // 3. YARGIÇ (Issuer)
         [Required]
-        public int IssuedByAdminId { get; set; }
+        public int IssuedByAdminId { get; private set; }
 
         [ForeignKey("IssuedByAdminId")]
-        public virtual User IssuedByAdmin { get; set; }
+        public virtual User IssuedByAdmin { get; private set; }
 
-        // 4. CEZA DETAYLARI
         [Required]
-        public string Reason { get; set; } = string.Empty;
+        public string Reason { get; private set; } = string.Empty;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; private set; } 
 
-        public DateTime? BanUntil { get; set; }
+        public DateTime? BanUntil { get; private set; } 
 
-        // 5. AF MEKANİZMASI (Unban)
-        public DateTime? UnbannedAt { get; set; } 
+        public DateTime? UnbannedAt { get; private set; }
+        public int? UnbannedByAdminId { get; private set; }
+        public virtual User? UnbannedByAdmin { get; private set; }
 
-        public int? UnbannedByAdminId { get; set; }
+        public void Revoke(int adminId)
+        {
+            if (UnbannedAt != null) throw new InvalidOperationException("Bu ban zaten kaldırılmış.");
+            UnbannedAt = DateTime.UtcNow;
+            UnbannedByAdminId = adminId;
+        }
 
-        [ForeignKey("UnbannedByAdminId")]
-        public virtual User? UnbannedByAdmin { get; set; }
-
-        // 6. HESAPLANAN DURUM
-        // Bu alan veritabanında YOKTUR. Sadece kod tarafında gerçeği söyler.
         [NotMapped]
         public bool IsActive
         {
             get
             {
-                // Ban kaldırılmışsa -> Pasif
                 if (UnbannedAt.HasValue) return false;
-
-                // Perma ban ise ve kaldırılmamışsa -> Aktif
                 if (BanUntil == null) return true;
-
-                // Süreli ban ise ve süre henüz dolmamışsa -> Aktif
                 return BanUntil > DateTime.UtcNow;
             }
         }
