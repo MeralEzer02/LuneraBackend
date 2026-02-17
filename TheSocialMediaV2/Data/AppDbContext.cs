@@ -21,18 +21,31 @@ namespace TheSocialMediaV2.API.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // --- EŞLEŞME KURALLARI ---
-            modelBuilder.Entity<Match>()
-                .HasOne(m => m.UserA)
-                .WithMany(u => u.MatchesAsUserA)
-                .HasForeignKey(m => m.UserAId)
-                .OnDelete(DeleteBehavior.Restrict);
+            // --- EŞLEŞME (MATCH) KURALLARI ---
+            modelBuilder.Entity<Match>(entity =>
+            {
+                // 1. İlişkiler (Foreign Keys)
+                // UserA silinirse, Match tablosu etkilenmesin (Restrict)
+                entity.HasOne(m => m.UserA)
+                    .WithMany(u => u.MatchesAsUserA)
+                    .HasForeignKey(m => m.UserAId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<Match>()
-                .HasOne(m => m.UserB)
-                .WithMany(u => u.MatchesAsUserB)
-                .HasForeignKey(m => m.UserBId)
-                .OnDelete(DeleteBehavior.Restrict);
+                // UserB silinirse, Match tablosu etkilenmesin (Restrict)
+                entity.HasOne(m => m.UserB)
+                    .WithMany(u => u.MatchesAsUserB)
+                    .HasForeignKey(m => m.UserBId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // 2. DUPLICATE PREVENTION (Tekil Aktif Eşleşme Kuralı)
+                entity.HasIndex(m => new { m.UserAId, m.UserBId })
+                      .IsUnique()
+                      .HasFilter("[Status] IN (1, 2)");
+
+                // 3. OPTIMISTIC CONCURRENCY CONFIGURATION
+                entity.Property(m => m.RowVersion)
+                      .IsRowVersion();
+            });
 
 
             // --- MESAJ KURALLARI ---
@@ -82,7 +95,7 @@ namespace TheSocialMediaV2.API.Data
             });
 
 
-            // --- USER BAN KURALLARI (IMMUTABLE HISTORY) ---
+            // --- USER BAN KURALLARI (IMMUTABLE HISTORY & FINTECH GRADE) ---
             modelBuilder.Entity<UserBan>(entity =>
             {
                 entity.HasOne(b => b.User)
@@ -105,7 +118,7 @@ namespace TheSocialMediaV2.API.Data
                     .HasForeignKey(b => b.ReportId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                // --- FINTECH GRADE IMMUTABILITY ---
+                // Immutability Enforcement (Kod tarafında değişiklik engelleme)
                 entity.Property(b => b.Reason).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
                 entity.Property(b => b.BanUntil).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
                 entity.Property(b => b.CreatedAt).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
@@ -114,7 +127,7 @@ namespace TheSocialMediaV2.API.Data
                 entity.Property(b => b.UserId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
             });
 
-            // DB Level Determinism
+            // DB Level Determinism (Aynı anda tek aktif ban)
             modelBuilder.Entity<UserBan>()
                 .HasIndex(b => b.UserId)
                 .IsUnique()

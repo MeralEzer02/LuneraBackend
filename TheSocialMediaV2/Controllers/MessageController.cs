@@ -21,7 +21,6 @@ namespace TheSocialMediaV2.API.Controllers
         }
 
         // 1. MESAJ GÖNDERME
-        // POST: api/message
         [HttpPost]
         public async Task<IActionResult> SendMessage([FromBody] SendMessageDto dto)
         {
@@ -35,16 +34,15 @@ namespace TheSocialMediaV2.API.Controllers
             if (match == null) return NotFound("Eşleşme bulunamadı.");
 
             // C. GÜVENLİK KONTROLÜ
-            // Bu eşleşmenin taraflarından biri ben miyim?
             if (match.UserAId != myId && match.UserBId != myId)
             {
                 return StatusCode(403, "Bu konuşmaya mesaj atma yetkiniz yok!");
             }
 
-            // D. Eşleşme Aktif mi?
-            if (match.Status != Enums.MatchStatus.Active)
+            // D. Eşleşme Aktif mi? (DÜZELTME: Accepted kontrolü)
+            if (match.Status != MatchStatus.Accepted)
             {
-                return BadRequest("Bu eşleşme sona ermiş veya engellenmiş. Mesaj atılamaz.");
+                return BadRequest("Bu eşleşme henüz kabul edilmemiş veya sona ermiş. Mesaj atılamaz.");
             }
 
             // E. Mesajı Oluştur ve Kaydet
@@ -64,26 +62,20 @@ namespace TheSocialMediaV2.API.Controllers
         }
 
         // 2. SOHBET GEÇMİŞİNİ GETİRME
-        // GET: api/message/{matchId}
         [HttpGet("{matchId}")]
         public async Task<IActionResult> GetMessages(int matchId)
         {
-            // A. Kimsin?
             var myIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int myId = int.Parse(myIdStr!);
 
-            // B. Eşleşmeyi Bul
             var match = await _context.Matches.FindAsync(matchId);
             if (match == null) return NotFound("Eşleşme bulunamadı.");
 
-            // C. GÜVENLİK KONTROLÜ
-            // Başkasının mesajlarını okumaya mı çalışıyorsun?
             if (match.UserAId != myId && match.UserBId != myId)
             {
                 return StatusCode(403, "Bu konuşmayı görüntüleme yetkiniz yok!");
             }
 
-            // D. GÜNCELLEME: Mesajları DTO Olarak Getir
             var messages = await _context.Messages
                 .Where(m => m.MatchId == matchId)
                 .OrderBy(m => m.CreatedAt)

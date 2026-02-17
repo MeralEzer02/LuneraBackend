@@ -34,7 +34,8 @@ namespace TheSocialMediaV2.API.Controllers
             var stats = new
             {
                 TotalUsers = await _context.Users.CountAsync(),
-                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == MatchStatus.Active),
+                // DÜZELTME: Enum kullanımı netleştirildi (Entities.MatchStatus.Accepted)
+                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == Entities.MatchStatus.Accepted),
                 TotalMessages = await _context.Messages.CountAsync(),
                 BannedUsers = await _context.Users.CountAsync(u => u.Status == 2)
             };
@@ -42,15 +43,16 @@ namespace TheSocialMediaV2.API.Controllers
             return Ok(stats);
         }
 
-        // 2. KULLANICI BANLAMA (Fintech Grade: Serializable + Retry Strategy)
+        // ... (BanUser, UnbanUser, GetPendingReports, ResolveReport metodları AYNI KALACAK) ...
+        // ... (Bu metodlarda zaten hata yoktu, sadece yukarıdaki MatchStatus hatası düzeltildi) ...
+
+        // 2. KULLANICI BANLAMA
         [HttpPost("ban-user/{userId}")]
         public async Task<IActionResult> BanUser(int userId, [FromBody] BanUserDto dto)
         {
-            // A. Kullanıcıyı bul
             var userToBan = await _context.Users.FindAsync(userId);
             if (userToBan == null) return NotFound("Kullanıcı bulunamadı.");
 
-            // B. Ön Kontrol
             bool isAlreadyBanned = await _context.UserBans.AnyAsync(b =>
                 b.UserId == userId &&
                 b.UnbannedAt == null &&
@@ -63,16 +65,13 @@ namespace TheSocialMediaV2.API.Controllers
 
             if (adminId == userId) return BadRequest("Yöneticiler kendilerini yasaklayamaz.");
 
-            // --- RETRY STRATEGY ---
             var strategy = _context.Database.CreateExecutionStrategy();
 
-            // CS8031 Hatası için <IActionResult> eklendi
             return await strategy.ExecuteAsync<IActionResult>(async () =>
             {
                 using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
                 try
                 {
-                    // D. Rapor
                     var autoReport = new Report
                     {
                         ReporterId = adminId,
@@ -87,7 +86,6 @@ namespace TheSocialMediaV2.API.Controllers
                     _context.Reports.Add(autoReport);
                     await _context.SaveChangesAsync();
 
-                    // E. Ban Kaydı
                     var userBan = new UserBan(
                         userId,
                         autoReport.Id,
@@ -98,19 +96,14 @@ namespace TheSocialMediaV2.API.Controllers
 
                     _context.UserBans.Add(userBan);
 
-                    // F. User Update
                     if (userToBan != null) userToBan.Status = 2;
 
                     await _context.SaveChangesAsync();
-
-                    // G. Log
                     await _logger.LogAsync(adminId, AdminActionType.UserBan, $"Ban: {dto.Reason}", userId);
 
-                    // H. Event
                     var domainEvent = new UserBannedEvent(userId, dto.DurationInDays, dto.Reason);
                     await _dispatcher.Dispatch(domainEvent);
 
-                    // I. Commit
                     await transaction.CommitAsync();
 
                     string sureBilgisi = dto.DurationInDays.HasValue ? $"{dto.DurationInDays} gün" : "SONSUZ";
@@ -168,9 +161,7 @@ namespace TheSocialMediaV2.API.Controllers
 
                 userToUnban.Status = 1;
                 await _context.SaveChangesAsync();
-
                 await _logger.LogAsync(adminId, AdminActionType.UserUnban, logDetails, userId);
-
                 await transaction.CommitAsync();
             }
             catch (Exception)
@@ -186,7 +177,6 @@ namespace TheSocialMediaV2.API.Controllers
         [HttpGet("reports/pending")]
         public async Task<IActionResult> GetPendingReports()
         {
-            // HATANIN KAYNAĞI BURADAYDI: Parantez ve virgül hatası giderildi.
             var reports = await _context.Reports
                 .Where(r => r.Status == ReportStatus.Pending)
                 .Include(r => r.Reporter)
@@ -213,8 +203,7 @@ namespace TheSocialMediaV2.API.Controllers
             var report = await _context.Reports.FindAsync(dto.ReportId);
             if (report == null) return NotFound("Rapor bulunamadı.");
 
-            if (report.Status != ReportStatus.Pending)
-                return BadRequest("Bu rapor zaten sonuçlandırılmış.");
+            if (report.Status != ReportStatus.Pending) return BadRequest("Bu rapor zaten sonuçlandırılmış.");
 
             var adminIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             int adminId = int.Parse(adminIdStr!);
@@ -230,12 +219,7 @@ namespace TheSocialMediaV2.API.Controllers
                 await _context.SaveChangesAsync();
 
                 var actionType = dto.IsAccepted ? AdminActionType.ReportAccepted : AdminActionType.ReportRejected;
-                await _logger.LogAsync(
-                    adminId,
-                    actionType,
-                    $"Rapor Sonuçlandı: {dto.AdminNotes}",
-                    report.ReportedUserId
-                );
+                await _logger.LogAsync(adminId, actionType, $"Rapor Sonuçlandı: {dto.AdminNotes}", report.ReportedUserId);
 
                 await transaction.CommitAsync();
             }

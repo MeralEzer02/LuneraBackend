@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Entities;
-using TheSocialMediaV2.API.Enums;
 using TheSocialMediaV2.API.DTOs;
 
 namespace TheSocialMediaV2.API.Controllers
@@ -50,13 +49,7 @@ namespace TheSocialMediaV2.API.Controllers
             var random = new Random();
             var luckyWinner = candidates[random.Next(candidates.Count)];
 
-            var newMatch = new Match
-            {
-                UserAId = myId,
-                UserBId = luckyWinner.Id,
-                CreatedAt = DateTime.Now,
-                Status = MatchStatus.Active
-            };
+            var newMatch = Match.Create(myId, luckyWinner.Id, 24);
 
             _context.Matches.Add(newMatch);
             await _context.SaveChangesAsync();
@@ -64,7 +57,7 @@ namespace TheSocialMediaV2.API.Controllers
             var result = new MatchResultDto
             {
                 MatchId = newMatch.Id,
-                Message = "Eşleşme Başarılı! 🎉",
+                Message = "İstek Gönderildi! Karşı tarafın onayı bekleniyor. ⏳",
                 MatchedUser = new MatchedUserDto
                 {
                     Id = luckyWinner.Id,
