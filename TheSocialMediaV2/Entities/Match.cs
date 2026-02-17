@@ -1,23 +1,40 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Entities
 {
     public enum MatchStatus
     {
-        Pending = 1,  
-        Accepted = 2, 
-        Rejected = 3, 
+        Pending = 1,
+        Accepted = 2,
+        Rejected = 3,
         Cancelled = 4,
-        Expired = 5   
+        Expired = 5
     }
 
     public class Match
     {
+        // --- DOMAIN EVENTS ---
+        private readonly List<IDomainEvent> _domainEvents = new();
+
+        [NotMapped]
+        public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
+        public void ClearDomainEvents() => _domainEvents.Clear();
+
+        private void AddDomainEvent(IDomainEvent domainEvent)
+        {
+            _domainEvents.Add(domainEvent);
+        }
+        // ----------------------------------------------
+
         protected Match() { }
 
+        // Private Constructor
         private Match(int initiatorId, int targetId, int durationHours)
         {
+            // ID Normalization
             if (initiatorId < targetId)
             {
                 UserAId = initiatorId;
@@ -30,7 +47,6 @@ namespace TheSocialMediaV2.API.Entities
             }
 
             RequesterId = initiatorId;
-
             Status = MatchStatus.Pending;
             CreatedAt = DateTime.UtcNow;
             ExpiresAt = DateTime.UtcNow.AddHours(durationHours);
@@ -47,7 +63,7 @@ namespace TheSocialMediaV2.API.Entities
         public virtual User UserA { get; private set; }
 
         [Required]
-        public int UserBId { get; private set; } 
+        public int UserBId { get; private set; }
 
         [ForeignKey("UserBId")]
         public virtual User UserB { get; private set; }
@@ -62,7 +78,7 @@ namespace TheSocialMediaV2.API.Entities
 
         public DateTime ExpiresAt { get; private set; }
 
-        public DateTime? RespondedAt { get; private set; } 
+        public DateTime? RespondedAt { get; private set; }
 
         // --- OPTIMISTIC CONCURRENCY CONTROL ---
         [Timestamp]
@@ -77,10 +93,15 @@ namespace TheSocialMediaV2.API.Entities
             if (durationHours <= 0)
                 throw new ArgumentException("Süre 0'dan büyük olmalıdır.");
 
-            return new Match(initiatorId, targetId, durationHours);
+            var match = new Match(initiatorId, targetId, durationHours);
+
+            // EVENT GENERATION: MatchCreated
+            match.AddDomainEvent(new MatchCreatedEvent(0, initiatorId, targetId));
+
+            return match;
         }
 
-        // --- STATE TRANSITION METHODS (DAVRANIŞLAR & GUARDS) ---
+        // --- STATE TRANSITION METHODS (DAVRANIŞLAR & EVENTS) ---
 
         // 1. KABUL ETME
         public void Accept()
@@ -91,12 +112,15 @@ namespace TheSocialMediaV2.API.Entities
             // Süre kontrolü
             if (DateTime.UtcNow > ExpiresAt)
             {
-                Expire(); // Domain bütünlüğü için expire durumuna çek
+                Expire();
                 throw new InvalidOperationException("Match süresi dolduğu için kabul edilemedi.");
             }
 
             Status = MatchStatus.Accepted;
             RespondedAt = DateTime.UtcNow;
+
+            // EVENT GENERATION: MatchAccepted
+            AddDomainEvent(new MatchAcceptedEvent(Id, UserAId, UserBId));
         }
 
         // 2. REDDETME
@@ -107,26 +131,28 @@ namespace TheSocialMediaV2.API.Entities
 
             Status = MatchStatus.Rejected;
             RespondedAt = DateTime.UtcNow;
+
+            // EVENT GENERATION: MatchRejected
+            AddDomainEvent(new MatchRejectedEvent(Id, 0)); // Actor ID parametre olarak geçilebilir
         }
 
         // 3. İPTAL ETME / EŞLEŞMEYİ BOZMA (Unmatch)
         public void Cancel()
         {
-            // Sadece Pending (İstekten vazgeçme) veya Accepted (Eşleşmeyi bozma) iptal edilebilir.
             if (Status != MatchStatus.Pending && Status != MatchStatus.Accepted)
                 throw new InvalidOperationException($"Match iptal edilemez. Mevcut durum: {Status}");
 
             Status = MatchStatus.Cancelled;
             RespondedAt = DateTime.UtcNow;
+
+            // EVENT GENERATION: MatchCancelled
+            AddDomainEvent(new MatchCancelledEvent(Id));
         }
 
-        // 4. SÜRE AŞIMI (Sistem Job'ı tarafından çağrılır)
+        // 4. SÜRE AŞIMI
         public void Expire()
         {
-            // Sadece Pending durumundakiler Expire olabilir.
-            // Zaten kabul edilmiş veya reddedilmişse süre işlemez.
-            if (Status != MatchStatus.Pending)
-                return;
+            if (Status != MatchStatus.Pending) return;
 
             // Guard: Süre gerçekten doldu mu?
             if (DateTime.UtcNow <= ExpiresAt)
@@ -134,6 +160,9 @@ namespace TheSocialMediaV2.API.Entities
 
             Status = MatchStatus.Expired;
             RespondedAt = DateTime.UtcNow;
+
+            // EVENT GENERATION: MatchExpired
+            AddDomainEvent(new MatchExpiredEvent(Id));
         }
     }
 }
