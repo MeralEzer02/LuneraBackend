@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TheSocialMediaV2.API.Entities;
+using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Data
 {
@@ -18,6 +20,7 @@ namespace TheSocialMediaV2.API.Data
         public DbSet<UserBan> UserBans { get; set; }
         public DbSet<UserAbuseMetric> UserAbuseMetrics { get; set; }
         public DbSet<ProcessedEvent> ProcessedEvents { get; set; }
+        public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -142,6 +145,72 @@ namespace TheSocialMediaV2.API.Data
                     .HasForeignKey<UserAbuseMetric>(m => m.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            // --- OUTBOX MESSAGE KURALLARI ---
+            modelBuilder.Entity<OutboxMessage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Type).IsRequired();
+                entity.Property(e => e.Payload).IsRequired();
+
+                // 1. PERFORMANCE INDEX 
+                entity.HasIndex(e => e.ProcessedOnUtc)
+                      .HasFilter("[ProcessedOnUtc] IS NULL");
+
+                // 2. ORDERING INDEX
+                entity.HasIndex(e => e.OccurredOnUtc);
+
+                // 3. FAILURE ANALYSIS INDEX
+                entity.HasIndex(e => e.RetryCount)
+                      .HasFilter("[RetryCount] > 0");
+            });
+        }
+
+        // --- ATOMIC OUTBOX IMPLEMENTATION ---
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            // 1. Transaction Commit edilmeden önce event'leri Outbox'a dönüştür
+            ConvertDomainEventsToOutboxMessages();
+
+            // 2. Commit (Match + OutboxMessages tek transaction'da gider)
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+
+        private void ConvertDomainEventsToOutboxMessages()
+        {
+            // A. Event üreten ve değişikliğe uğramış entity'leri bul
+            var events = ChangeTracker
+                .Entries<IHasDomainEvents>()
+                .Select(x => x.Entity)
+                .Where(entity => entity.DomainEvents.Any())
+                .ToList();
+
+            if (!events.Any()) return; // Event yoksa çık
+
+            // B. Hepsini OutboxMessage'a çevir
+            var outboxMessages = events
+                .SelectMany(entity =>
+                {
+                    var domainEvents = entity.DomainEvents.ToList();
+
+                    entity.ClearDomainEvents();
+
+                    return domainEvents;
+                })
+                .Select(domainEvent => new OutboxMessage(
+                    id: Guid.NewGuid(),
+                    occurredOnUtc: DateTime.UtcNow,
+                    type: domainEvent.GetType().AssemblyQualifiedName!,
+                    payload: JsonSerializer.Serialize(domainEvent, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    })
+                ))
+                .ToList();
+
+            OutboxMessages.AddRange(outboxMessages);
         }
     }
 }

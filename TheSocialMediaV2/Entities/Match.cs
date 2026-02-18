@@ -4,6 +4,7 @@ using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Entities
 {
+    // Eşleşme Durumları
     public enum MatchStatus
     {
         Pending = 1,
@@ -13,7 +14,7 @@ namespace TheSocialMediaV2.API.Entities
         Expired = 5
     }
 
-    public class Match
+    public class Match : IHasDomainEvents
     {
         // --- DOMAIN EVENTS ---
         private readonly List<IDomainEvent> _domainEvents = new();
@@ -133,7 +134,7 @@ namespace TheSocialMediaV2.API.Entities
             RespondedAt = DateTime.UtcNow;
 
             // EVENT GENERATION: MatchRejected
-            AddDomainEvent(new MatchRejectedEvent(Id, 0)); // Actor ID parametre olarak geçilebilir
+            AddDomainEvent(new MatchRejectedEvent(Id, 0));
         }
 
         // 3. İPTAL ETME / EŞLEŞMEYİ BOZMA (Unmatch)
