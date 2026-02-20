@@ -27,29 +27,23 @@ namespace TheSocialMediaV2.API.Data
             // --- EŞLEŞME (MATCH) KURALLARI ---
             modelBuilder.Entity<Match>(entity =>
             {
-                // 1. İlişkiler (Foreign Keys)
-                // UserA silinirse, Match tablosu etkilenmesin (Restrict)
                 entity.HasOne(m => m.UserA)
                     .WithMany(u => u.MatchesAsUserA)
                     .HasForeignKey(m => m.UserAId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                // UserB silinirse, Match tablosu etkilenmesin (Restrict)
                 entity.HasOne(m => m.UserB)
                     .WithMany(u => u.MatchesAsUserB)
                     .HasForeignKey(m => m.UserBId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                // 2. DUPLICATE PREVENTION (Tekil Aktif Eşleşme Kuralı)
                 entity.HasIndex(m => new { m.UserAId, m.UserBId })
                       .IsUnique()
                       .HasFilter("[Status] IN (1, 2)");
 
-                // 3. OPTIMISTIC CONCURRENCY CONFIGURATION
                 entity.Property(m => m.RowVersion)
                       .IsRowVersion();
             });
-
 
             // --- MESAJ KURALLARI ---
             modelBuilder.Entity<Message>()
@@ -97,7 +91,6 @@ namespace TheSocialMediaV2.API.Data
                     .HasConversion<int>();
             });
 
-
             // --- USER BAN KURALLARI (IMMUTABLE HISTORY & FINTECH GRADE) ---
             modelBuilder.Entity<UserBan>(entity =>
             {
@@ -121,7 +114,6 @@ namespace TheSocialMediaV2.API.Data
                     .HasForeignKey(b => b.ReportId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                // Immutability Enforcement (Kod tarafında değişiklik engelleme)
                 entity.Property(b => b.Reason).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
                 entity.Property(b => b.BanUntil).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
                 entity.Property(b => b.CreatedAt).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
@@ -130,7 +122,6 @@ namespace TheSocialMediaV2.API.Data
                 entity.Property(b => b.UserId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
             });
 
-            // DB Level Determinism (Aynı anda tek aktif ban)
             modelBuilder.Entity<UserBan>()
                 .HasIndex(b => b.UserId)
                 .IsUnique()
@@ -146,22 +137,40 @@ namespace TheSocialMediaV2.API.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // --- OUTBOX MESSAGE KURALLARI ---
+            // --- OUTBOX MESSAGE KURALLARI (HARDENED) ---
             modelBuilder.Entity<OutboxMessage>(entity =>
             {
+                // PK
                 entity.HasKey(e => e.Id);
 
-                entity.Property(e => e.Type).IsRequired();
-                entity.Property(e => e.Payload).IsRequired();
+                // Type: Assembly name uzun olabilir, max güvenli.
+                entity.Property(e => e.Type)
+                      .IsRequired()
+                      .HasColumnType("nvarchar(max)");
 
-                // 1. PERFORMANCE INDEX 
+                // Payload: JSON data, sınırsız olmalı.
+                entity.Property(e => e.Payload)
+                      .IsRequired()
+                      .HasColumnType("nvarchar(max)");
+
+                // Error: Stack trace sığmalı.
+                entity.Property(e => e.Error)
+                      .IsRequired(false) // Nullable
+                      .HasColumnType("nvarchar(max)");
+
+                // RetryCount: DB seviyesinde default 0 garantisi.
+                entity.Property(e => e.RetryCount)
+                      .IsRequired()
+                      .HasDefaultValue(0);
+
+                // 1. PERFORMANCE INDEX (Kritik - Filtered)
                 entity.HasIndex(e => e.ProcessedOnUtc)
                       .HasFilter("[ProcessedOnUtc] IS NULL");
 
-                // 2. ORDERING INDEX
+                // 2. ORDERING INDEX (FIFO garantisi için)
                 entity.HasIndex(e => e.OccurredOnUtc);
 
-                // 3. FAILURE ANALYSIS INDEX
+                // 3. FAILURE ANALYSIS INDEX (Hatalıları bulmak için)
                 entity.HasIndex(e => e.RetryCount)
                       .HasFilter("[RetryCount] > 0");
             });
@@ -179,16 +188,14 @@ namespace TheSocialMediaV2.API.Data
 
         private void ConvertDomainEventsToOutboxMessages()
         {
-            // A. Event üreten ve değişikliğe uğramış entity'leri bul
             var events = ChangeTracker
                 .Entries<IHasDomainEvents>()
                 .Select(x => x.Entity)
                 .Where(entity => entity.DomainEvents.Any())
                 .ToList();
 
-            if (!events.Any()) return; // Event yoksa çık
+            if (!events.Any()) return;
 
-            // B. Hepsini OutboxMessage'a çevir
             var outboxMessages = events
                 .SelectMany(entity =>
                 {

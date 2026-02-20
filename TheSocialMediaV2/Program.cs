@@ -31,6 +31,8 @@ builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 // Handler'larý tek tek kaydediyoruz
 builder.Services.AddScoped<IDomainEventHandler<UserBannedEvent>, UserBannedEventHandler>();
 
+builder.Services.AddHostedService<TheSocialMediaV2.API.Services.OutboxBackgroundWorker>();
+
 // Swagger Ayarlarý (JWT Desteði ile)
 builder.Services.AddSwaggerGen(option =>
 {
