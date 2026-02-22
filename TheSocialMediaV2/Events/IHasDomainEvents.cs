@@ -4,7 +4,7 @@ namespace TheSocialMediaV2.API.Events
 {
     public interface IHasDomainEvents
     {
-        IReadOnlyCollection<IDomainEvent> DomainEvents { get; }
+        IReadOnlyCollection<IInternalDomainEvent> DomainEvents { get; }
         void ClearDomainEvents();
     }
 }

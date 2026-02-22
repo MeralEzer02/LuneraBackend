@@ -2,7 +2,7 @@
 
 namespace TheSocialMediaV2.API.Events
 {
-    public class DomainEventDispatcher : IDomainEventDispatcher
+    public class DomainEventDispatcher : IInternalDomainEventDispatcher
     {
         private readonly IServiceProvider _serviceProvider;
 
@@ -13,7 +13,7 @@ namespace TheSocialMediaV2.API.Events
 
         public async Task Dispatch<T>(T domainEvent) where T : IInternalDomainEvent
         {
-            var handlers = _serviceProvider.GetServices<IDomainEventHandler<T>>();
+            var handlers = _serviceProvider.GetServices<IInternalDomainEventHandler<T>>();
 
             foreach (var handler in handlers)
             {

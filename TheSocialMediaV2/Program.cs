@@ -26,12 +26,12 @@ builder.Services.AddScoped<TheSocialMediaV2.API.Services.IAdminActionLogger, The
 builder.Services.AddEndpointsApiExplorer();
 
 // --- EVENT LAYER ---
-builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+builder.Services.AddScoped<IInternalDomainEventDispatcher, DomainEventDispatcher>();
 
 // Handler'larý tek tek kaydediyoruz
-builder.Services.AddScoped<IDomainEventHandler<UserBannedEvent>, UserBannedEventHandler>();
+builder.Services.AddScoped<IInternalDomainEventHandler<UserBannedEvent>, UserBannedEventHandler>();
 
-builder.Services.AddHostedService<TheSocialMediaV2.API.Services.OutboxBackgroundWorker>();
+builder.Services.AddHostedService<TheSocialMediaV2.API.Services.OutboxProcessorBackgroundService>();
 
 // Swagger Ayarlarý (JWT Desteði ile)
 builder.Services.AddSwaggerGen(option =>

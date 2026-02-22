@@ -2,15 +2,16 @@
 {
     public interface IInternalDomainEvent
     {
+        Guid EventId { get; }
         DateTime OccurredOn { get; }
     }
 
-    public interface IDomainEventHandler<T> where T : IInternalDomainEvent
+    public interface IInternalDomainEventHandler<T> where T : IInternalDomainEvent
     {
         Task Handle(T domainEvent);
     }
 
-    public interface IDomainEventDispatcher
+    public interface IInternalDomainEventDispatcher
     {
         Task Dispatch<T>(T domainEvent) where T : IInternalDomainEvent;
     }

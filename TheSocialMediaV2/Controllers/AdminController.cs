@@ -18,9 +18,9 @@ namespace TheSocialMediaV2.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IAdminActionLogger _logger;
-        private readonly IDomainEventDispatcher _dispatcher;
+        private readonly IInternalDomainEventDispatcher _dispatcher;
 
-        public AdminController(AppDbContext context, IAdminActionLogger logger, IDomainEventDispatcher dispatcher)
+        public AdminController(AppDbContext context, IAdminActionLogger logger, IInternalDomainEventDispatcher dispatcher)
         {
             _context = context;
             _logger = logger;

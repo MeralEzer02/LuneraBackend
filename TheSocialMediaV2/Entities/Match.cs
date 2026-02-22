@@ -17,14 +17,14 @@ namespace TheSocialMediaV2.API.Entities
     public class Match : IHasDomainEvents
     {
         // --- DOMAIN EVENTS ---
-        private readonly List<IDomainEvent> _domainEvents = new();
+        private readonly List<IInternalDomainEvent> _domainEvents = new();
 
         [NotMapped]
-        public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+        public IReadOnlyCollection<IInternalDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
         public void ClearDomainEvents() => _domainEvents.Clear();
 
-        private void AddDomainEvent(IDomainEvent domainEvent)
+        private void AddDomainEvent(IInternalDomainEvent domainEvent)
         {
             _domainEvents.Add(domainEvent);
         }

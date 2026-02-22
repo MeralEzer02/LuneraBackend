@@ -46,7 +46,7 @@ namespace TheSocialMediaV2.API.Services
             // Her batch için yeni bir Scope (Memory Leak ve Concurrency'yi önler)
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var dispatcher = scope.ServiceProvider.GetRequiredService<IDomainEventDispatcher>();
+            var dispatcher = scope.ServiceProvider.GetRequiredService<IInternalDomainEventDispatcher>();
 
             // 1. FETCH STRATEGY
             // İşlenmemiş (ProcessedOnUtc == null) ve Zehirli Olmayan (RetryCount <= 5)
@@ -74,20 +74,18 @@ namespace TheSocialMediaV2.API.Services
                     // B. Deserialize
                     var domainEvent = JsonSerializer.Deserialize(message.Payload, eventType, new JsonSerializerOptions
                     {
-                        PropertyNameCaseInsensitive = true
-                    }) as IDomainEvent;
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    }) as IInternalDomainEvent;
 
                     if (domainEvent == null)
-                    {
-                        throw new InvalidOperationException("Payload deserialize edilemedi veya IDomainEvent değil.");
-                    }
+                        throw new InvalidOperationException("Payload deserialize edilemedi veya IInternalDomainEvent değil.");
 
-                    // C. Publish (Olayı fırlat)
-                    await dispatcher.Dispatch(domainEvent);
+                    // C. Publish
+                    await dispatcher.Dispatch((dynamic)domainEvent);
 
                     // D. Başarı Durumu (Success)
                     message.ProcessedOnUtc = DateTime.UtcNow;
-                    message.Error = null; // Varsa eski hataları temizle
+                    message.Error = null;
                 }
                 catch (Exception ex)
                 {

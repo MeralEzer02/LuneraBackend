@@ -6,7 +6,7 @@ using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Events
 {
-    public class UserBannedEventHandler : IDomainEventHandler<UserBannedEvent>
+    public class UserBannedEventHandler : IInternalDomainEventHandler<UserBannedEvent>
     {
         private readonly AppDbContext _context;
 
