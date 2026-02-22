@@ -27,6 +27,15 @@ namespace TheSocialMediaV2.API.Data
             // --- EŞLEŞME (MATCH) KURALLARI ---
             modelBuilder.Entity<Match>(entity =>
             {
+                entity.UsePropertyAccessMode(PropertyAccessMode.Field);
+
+                // YENİ: SQL SERVER CHECK CONSTRAINTS (DB SEVİYESİ KALKANLAR)
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_Match_UserNormalization", "[UserAId] < [UserBId]");
+                    t.HasCheckConstraint("CK_Match_TTL", "[ExpiresAt] > [CreatedAt]");
+                });
+
                 entity.HasOne(m => m.UserA)
                     .WithMany(u => u.MatchesAsUserA)
                     .HasForeignKey(m => m.UserAId)
@@ -140,49 +149,55 @@ namespace TheSocialMediaV2.API.Data
             // --- OUTBOX MESSAGE KURALLARI (HARDENED) ---
             modelBuilder.Entity<OutboxMessage>(entity =>
             {
-                // PK
+                // SQL SERVER CHECK CONSTRAINTS
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_Outbox_RetryCount", "[RetryCount] >= 0");
+                });
+
                 entity.HasKey(e => e.Id);
 
-                // Type: Assembly name uzun olabilir, max güvenli.
                 entity.Property(e => e.Type)
                       .IsRequired()
                       .HasColumnType("nvarchar(max)");
 
-                // Payload: JSON data, sınırsız olmalı.
                 entity.Property(e => e.Payload)
                       .IsRequired()
                       .HasColumnType("nvarchar(max)");
 
-                // Error: Stack trace sığmalı.
                 entity.Property(e => e.Error)
-                      .IsRequired(false) // Nullable
+                      .IsRequired(false)
                       .HasColumnType("nvarchar(max)");
 
-                // RetryCount: DB seviyesinde default 0 garantisi.
                 entity.Property(e => e.RetryCount)
                       .IsRequired()
                       .HasDefaultValue(0);
 
-                // 1. PERFORMANCE INDEX (Kritik - Filtered)
                 entity.HasIndex(e => e.ProcessedOnUtc)
                       .HasFilter("[ProcessedOnUtc] IS NULL");
 
-                // 2. ORDERING INDEX (FIFO garantisi için)
                 entity.HasIndex(e => e.OccurredOnUtc);
 
-                // 3. FAILURE ANALYSIS INDEX (Hatalıları bulmak için)
                 entity.HasIndex(e => e.RetryCount)
                       .HasFilter("[RetryCount] > 0");
             });
         }
 
-        // --- ATOMIC OUTBOX IMPLEMENTATION ---
+        // --- ATOMIC OUTBOX IMPLEMENTATION & INVARIANT GUARD ---
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            // 1. Transaction Commit edilmeden önce event'leri Outbox'a dönüştür
+            // Invariant Validation
+            var matches = ChangeTracker.Entries<Match>()
+                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+                .Select(e => e.Entity);
+
+            foreach (var match in matches)
+            {
+                match.EnsureInvariants();
+            }
+
             ConvertDomainEventsToOutboxMessages();
 
-            // 2. Commit (Match + OutboxMessages tek transaction'da gider)
             return await base.SaveChangesAsync(cancellationToken);
         }
 

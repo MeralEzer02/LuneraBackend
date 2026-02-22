@@ -22,7 +22,7 @@ namespace TheSocialMediaV2.API.Entities
         [NotMapped]
         public IReadOnlyCollection<IInternalDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
-        public void ClearDomainEvents() => _domainEvents.Clear();
+        void IHasDomainEvents.ClearDomainEvents() => _domainEvents.Clear();
 
         private void AddDomainEvent(IInternalDomainEvent domainEvent)
         {
@@ -61,13 +61,13 @@ namespace TheSocialMediaV2.API.Entities
         public int UserAId { get; private set; }
 
         [ForeignKey("UserAId")]
-        public virtual User UserA { get; private set; }
+        public User UserA { get; private set; }
 
         [Required]
         public int UserBId { get; private set; }
 
         [ForeignKey("UserBId")]
-        public virtual User UserB { get; private set; }
+        public User UserB { get; private set; }
 
         [Required]
         public int RequesterId { get; private set; }
@@ -85,7 +85,7 @@ namespace TheSocialMediaV2.API.Entities
         [Timestamp]
         public byte[] RowVersion { get; private set; }
 
-        // --- FACTORY METHOD (Tek Giriş Kapısı) ---
+        // --- FACTORY METHOD ---
         public static Match Create(int initiatorId, int targetId, int durationHours = 24)
         {
             if (initiatorId == targetId)
@@ -100,6 +100,19 @@ namespace TheSocialMediaV2.API.Entities
             match.AddDomainEvent(new MatchCreatedEvent(0, initiatorId, targetId));
 
             return match;
+        }
+
+        // --- INVARIANT GUARD (EF BYPASS KALKANI) ---
+        public void EnsureInvariants()
+        {
+            if (UserAId >= UserBId)
+                throw new InvalidOperationException("INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalıdır.");
+
+            if (Status == MatchStatus.Pending && RespondedAt.HasValue)
+                throw new InvalidOperationException("INVARIANT VIOLATION: Pending statüsünde RespondedAt dolu olamaz.");
+
+            if (Status != MatchStatus.Pending && !RespondedAt.HasValue)
+                throw new InvalidOperationException("INVARIANT VIOLATION: İşlem görmüş eşleşmede RespondedAt boş olamaz.");
         }
 
         // --- STATE TRANSITION METHODS (DAVRANIŞLAR & EVENTS) ---
