@@ -10,7 +10,7 @@ namespace TheSocialMediaV2.API.Controllers
     public class DebugMatchController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly IServiceScopeFactory _scopeFactory; // YENİ: İkinci Context için gerekli
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public DebugMatchController(AppDbContext context, IServiceScopeFactory scopeFactory)
         {
@@ -18,8 +18,6 @@ namespace TheSocialMediaV2.API.Controllers
             _scopeFactory = scopeFactory;
         }
 
-        // --- ÖNCEKİ TESTLER (Duplicate, Expire vs.) DURUYOR ---
-        // (Buraya yer kaplamasın diye tekrar yazmıyorum, silmediysen kalsınlar)
 
         // ADIM 1: GERÇEK ROW VERSION CONFLICT TESTİ (2 Context)
         [HttpPost("test-real-occ/{userA}/{userB}")]
@@ -32,7 +30,9 @@ namespace TheSocialMediaV2.API.Controllers
             using (var scopeInit = _scopeFactory.CreateScope())
             {
                 var dbInit = scopeInit.ServiceProvider.GetRequiredService<AppDbContext>();
-                var match = Match.Create(userA, userB, 24);
+
+                var match = Match.Create(userA, userB, 24, DateTime.UtcNow);
+
                 dbInit.Matches.Add(match);
                 await dbInit.SaveChangesAsync();
                 matchId = match.Id;
@@ -54,11 +54,13 @@ namespace TheSocialMediaV2.API.Controllers
 
             // 4. DEĞİŞİKLİK: İkisi de geçerli (Valid) hamleler yapıyor
             // Pending -> Accepted (Valid)
-            matchA.Accept();
+
+            matchA.Accept(DateTime.UtcNow);
             logs.Add("3. Context A: Accept() çağırdı.");
 
             // Pending -> Cancelled (Valid)
-            matchB.Cancel();
+
+            matchB.Cancel(DateTime.UtcNow);
             logs.Add("4. Context B: Cancel() çağırdı.");
 
             try
@@ -76,15 +78,12 @@ namespace TheSocialMediaV2.API.Controllers
 
             try
             {
-                // 6. KAYIT B: HATA ALMALI (DbUpdateConcurrencyException)
-                // Çünkü matchB'nin elindeki RowVersion artık eski.
                 await contextB.SaveChangesAsync();
 
                 return BadRequest("HATA: Context B kaydetmeyi başardı! (OCC ÇALIŞMIYOR - Last Write Wins oldu)");
             }
             catch (DbUpdateConcurrencyException)
             {
-                // BEKLENEN DURUM
                 logs.Add("6. Context B: DbUpdateConcurrencyException YAKALANDI! ✅");
                 logs.Add("SONUÇ: Test BAŞARILI. İkinci işlem reddedildi, veri ezilmedi.");
                 return Ok(logs);

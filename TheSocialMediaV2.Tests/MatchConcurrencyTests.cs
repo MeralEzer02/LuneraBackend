@@ -18,7 +18,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
             int matchId;
             using (var setupContext = new AppDbContext(options))
             {
-                var match = Match.Create(1, 2, 24);
+                var match = Match.Create(1, 2, 24, DateTime.UtcNow);
                 typeof(Match).GetProperty("RowVersion")!.SetValue(match, BitConverter.GetBytes(1L));
                 setupContext.Matches.Add(match);
                 await setupContext.SaveChangesAsync();
@@ -32,12 +32,12 @@ namespace TheSocialMediaV2.API.Tests.Domain
             var matchForUser2 = await context2.Matches.FindAsync(matchId);
 
             // 1. KULLANICI İŞLEMİ (BAŞARILI)
-            matchForUser1!.Accept();
+            matchForUser1!.Accept(DateTime.UtcNow);
             typeof(Match).GetProperty("RowVersion")!.SetValue(matchForUser1, BitConverter.GetBytes(2L));
             await context1.SaveChangesAsync();
 
             // 2. KULLANICI İŞLEMİ (ÇARPIŞMA!)
-            matchForUser2!.Cancel();
+            matchForUser2!.Cancel(DateTime.UtcNow);
             typeof(Match).GetProperty("RowVersion")!.SetValue(matchForUser2, BitConverter.GetBytes(3L));
 
             Func<Task> act = async () => await context2.SaveChangesAsync();
@@ -55,7 +55,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
             int matchId;
             using (var setupContext = new AppDbContext(options))
             {
-                var match = Match.Create(1, 2, 24);
+                var match = Match.Create(1, 2, 24, DateTime.UtcNow);
                 typeof(Match).GetProperty("RowVersion")!.SetValue(match, BitConverter.GetBytes(1L));
                 setupContext.Matches.Add(match);
                 await setupContext.SaveChangesAsync();
@@ -78,7 +78,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
                 try
                 {
                     var match = matches[i];
-                    match.Accept();
+                    match.Accept(DateTime.UtcNow);
 
                     typeof(Match).GetProperty("RowVersion")!.SetValue(match, BitConverter.GetBytes(DateTime.UtcNow.Ticks + i));
 

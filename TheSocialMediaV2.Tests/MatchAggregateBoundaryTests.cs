@@ -13,7 +13,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test01_Aggregate_Should_Not_Have_Public_Constructors()
         {
-            // Assert
             var publicConstructors = typeof(Match).GetConstructors(BindingFlags.Public | BindingFlags.Instance);
             publicConstructors.Should().BeEmpty("Aggregate sadece Factory metot ile yaratýlmalýdýr.");
         }
@@ -21,7 +20,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test02_Aggregate_Should_Not_Have_Virtual_Properties_For_Lazy_Loading_Prevention()
         {
-            // Assert
             var virtualProperties = typeof(Match).GetProperties()
                 .Where(p => p.GetMethod != null && p.GetMethod.IsVirtual && !p.GetMethod.IsFinal);
 
@@ -31,7 +29,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test03_Aggregate_Properties_Should_Not_Have_Public_Setters()
         {
-            // Assert
             var propertiesWithPublicSetters = typeof(Match).GetProperties()
                 .Where(p => p.SetMethod != null && p.SetMethod.IsPublic);
 
@@ -41,24 +38,20 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test04_DomainEvents_Should_Throw_InvalidCastException_When_Hacked()
         {
-            // Arrange
-            var match = Match.Create(1, 2, 24);
+            var match = Match.Create(1, 2, 24, DateTime.UtcNow);
 
-            // Act
             Action act = () =>
             {
                 var hackedList = (List<IInternalDomainEvent>)match.DomainEvents;
                 hackedList.Clear();
             };
 
-            // Assert
             act.Should().Throw<InvalidCastException>("DomainEvents listesi dýþarýdan hiçbir þekilde cast edilip deðiþtirilememelidir.");
         }
 
         [Fact]
         public void Test05_ClearDomainEvents_Should_Not_Be_Public()
         {
-            // Assert
             var clearMethod = typeof(Match).GetMethod("ClearDomainEvents", BindingFlags.Public | BindingFlags.Instance);
             clearMethod.Should().BeNull("ClearDomainEvents dýþarýdan (API Layer) çaðrýlamaz, sadece EF Context (internal) çaðýrabilir.");
         }
@@ -66,37 +59,31 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test06_Create_With_Same_User_Should_Throw_DomainException()
         {
-            // Act
-            Action act = () => Match.Create(5, 5, 24);
+            Action act = () => Match.Create(5, 5, 24, DateTime.UtcNow);
 
-            // Assert
             act.Should().Throw<InvalidOperationException>().WithMessage("*kendisiyle eþleþemez*");
         }
 
         [Fact]
         public void Test07_Accept_When_Not_Pending_Should_Throw()
         {
-            // Arrange
-            var match = Match.Create(1, 2, 24);
-            match.Cancel(); // Status = Cancelled
+            var match = Match.Create(1, 2, 24, DateTime.UtcNow);
+            match.Cancel(DateTime.UtcNow);
 
-            // Act
-            Action act = () => match.Accept();
+            Action act = () => match.Accept(DateTime.UtcNow);
 
-            // Assert
             act.Should().Throw<InvalidOperationException>().WithMessage("*kabul edilemez*");
         }
 
         [Fact]
         public async Task Test08_EF_ChangeTracker_Bypass_Should_Throw_On_SaveChanges()
         {
-            // Arrange - In-memory DB 
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
                 .Options;
 
             using var context = new AppDbContext(options);
-            var match = Match.Create(3, 4, 24); // Status: Pending, RespondedAt: Null
+            var match = Match.Create(3, 4, 24, DateTime.UtcNow);
 
             typeof(Match).GetProperty("RowVersion")!.SetValue(match, new byte[8]);
 
@@ -113,13 +100,11 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test09_Reflection_Hack_To_Set_State_Should_Fail_Validation()
         {
-            // Arrange
-            var match = Match.Create(1, 2, 24);
+            var match = Match.Create(1, 2, 24, DateTime.UtcNow);
 
             var propertyInfo = typeof(Match).GetProperty("UserAId", BindingFlags.Public | BindingFlags.Instance);
             propertyInfo!.DeclaringType!.GetProperty("UserAId")!.SetValue(match, 10, BindingFlags.NonPublic | BindingFlags.SetProperty, null, null, null);
 
-            // Assert
             Action act = () => match.EnsureInvariants();
             act.Should().Throw<InvalidOperationException>()
                .WithMessage("*INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalýdýr*");
@@ -128,14 +113,11 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public void Test10_Cancel_When_Already_Cancelled_Should_Throw()
         {
-            // Arrange
-            var match = Match.Create(1, 2, 24);
-            match.Cancel();
+            var match = Match.Create(1, 2, 24, DateTime.UtcNow);
+            match.Cancel(DateTime.UtcNow);
 
-            // Act
-            Action act = () => match.Cancel();
+            Action act = () => match.Cancel(DateTime.UtcNow);
 
-            // Assert
             act.Should().Throw<InvalidOperationException>().WithMessage("*iptal edilemez*");
         }
     }

@@ -49,7 +49,10 @@ namespace TheSocialMediaV2.API.Controllers
             var random = new Random();
             var luckyWinner = candidates[random.Next(candidates.Count)];
 
-            var newMatch = Match.Create(myId, luckyWinner.Id, 24);
+            var newMatch = Match.Create(myId, luckyWinner.Id, 24, DateTime.UtcNow);
+
+            _context.Matches.Add(newMatch);
+            await _context.SaveChangesAsync();
 
             _context.Matches.Add(newMatch);
             await _context.SaveChangesAsync();

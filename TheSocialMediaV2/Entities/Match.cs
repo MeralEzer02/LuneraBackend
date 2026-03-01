@@ -1,182 +1,119 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Entities
 {
-    // Eşleşme Durumları
-    public enum MatchStatus
-    {
-        Pending = 1,
-        Accepted = 2,
-        Rejected = 3,
-        Cancelled = 4,
-        Expired = 5
-    }
+    public enum MatchStatus { Pending = 1, Accepted = 2, Rejected = 3, Cancelled = 4, Expired = 5 }
 
     public class Match : IHasDomainEvents
     {
-        // --- DOMAIN EVENTS ---
-        private readonly List<IInternalDomainEvent> _domainEvents = new();
-
-        [NotMapped]
-        public IReadOnlyCollection<IInternalDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
-
-        void IHasDomainEvents.ClearDomainEvents() => _domainEvents.Clear();
-
-        private void AddDomainEvent(IInternalDomainEvent domainEvent)
-        {
-            _domainEvents.Add(domainEvent);
-        }
-        // ----------------------------------------------
-
-        protected Match() { }
-
-        // Private Constructor
-        private Match(int initiatorId, int targetId, int durationHours)
-        {
-            // ID Normalization
-            if (initiatorId < targetId)
-            {
-                UserAId = initiatorId;
-                UserBId = targetId;
-            }
-            else
-            {
-                UserAId = targetId;
-                UserBId = initiatorId;
-            }
-
-            RequesterId = initiatorId;
-            Status = MatchStatus.Pending;
-            CreatedAt = DateTime.UtcNow;
-            ExpiresAt = DateTime.UtcNow.AddHours(durationHours);
-        }
-
         public int Id { get; private set; }
-
-        // --- DOMAIN STATE PROPERTIES ---
-
-        [Required]
         public int UserAId { get; private set; }
-
-        [ForeignKey("UserAId")]
-        public User UserA { get; private set; }
-
-        [Required]
         public int UserBId { get; private set; }
-
-        [ForeignKey("UserBId")]
-        public User UserB { get; private set; }
-
-        [Required]
-        public int RequesterId { get; private set; }
-
-        [Required]
         public MatchStatus Status { get; private set; }
-
         public DateTime CreatedAt { get; private set; }
-
         public DateTime ExpiresAt { get; private set; }
-
         public DateTime? RespondedAt { get; private set; }
 
-        // --- OPTIMISTIC CONCURRENCY CONTROL ---
         [Timestamp]
         public byte[] RowVersion { get; private set; }
 
-        // --- FACTORY METHOD ---
-        public static Match Create(int initiatorId, int targetId, int durationHours = 24)
+        // Navigation Properties
+        public User UserA { get; private set; }
+        public User UserB { get; private set; }
+
+        public IReadOnlyCollection<Message> Messages => _messages.AsReadOnly();
+        private readonly List<Message> _messages = new();
+
+        private readonly List<IInternalDomainEvent> _domainEvents = new();
+        public IReadOnlyCollection<IInternalDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
+        private Match() { }
+
+        public static Match Create(int userAId, int userBId, int expirationHours, DateTime utcNow)
         {
-            if (initiatorId == targetId)
-                throw new InvalidOperationException("Kullanıcı kendisiyle eşleşemez.");
+            if (userAId == userBId)
+                throw new InvalidOperationException("Bir kullanıcı kendisiyle eşleşemez.");
 
-            if (durationHours <= 0)
-                throw new ArgumentException("Süre 0'dan büyük olmalıdır.");
+            var match = new Match
+            {
+                UserAId = Math.Min(userAId, userBId),
+                UserBId = Math.Max(userAId, userBId),
+                Status = MatchStatus.Pending,
+                CreatedAt = utcNow,
+                ExpiresAt = utcNow.AddHours(expirationHours)
+            };
 
-            var match = new Match(initiatorId, targetId, durationHours);
-
-            // EVENT GENERATION: MatchCreated
-            match.AddDomainEvent(new MatchCreatedEvent(0, initiatorId, targetId));
-
+            match.AddDomainEvent(new MatchCreatedEvent(match.UserAId, match.UserBId, match.ExpiresAt));
+            match.EnsureInvariants();
             return match;
         }
 
-        // --- INVARIANT GUARD (EF BYPASS KALKANI) ---
+        public void Accept(DateTime utcNow)
+        {
+            if (Status == MatchStatus.Expired || utcNow >= ExpiresAt)
+            {
+                Expire(utcNow);
+                throw new InvalidOperationException("Eşleşme süresi dolduğu için kabul edilemez.");
+            }
+            if (Status != MatchStatus.Pending)
+                throw new InvalidOperationException("Bu eşleşme şu anda kabul edilemez.");
+
+            Status = MatchStatus.Accepted;
+            RespondedAt = utcNow;
+            AddDomainEvent(new MatchAcceptedEvent(Id, UserAId, UserBId));
+            EnsureInvariants();
+        }
+
+        public void Reject(DateTime utcNow)
+        {
+            if (Status != MatchStatus.Pending)
+                throw new InvalidOperationException("Bu eşleşme reddedilemez.");
+
+            Status = MatchStatus.Rejected;
+            RespondedAt = utcNow;
+            AddDomainEvent(new MatchRejectedEvent(Id, UserAId, UserBId));
+            EnsureInvariants();
+        }
+
+        public void Cancel(DateTime utcNow)
+        {
+            if (Status == MatchStatus.Cancelled || Status == MatchStatus.Rejected || Status == MatchStatus.Expired)
+                throw new InvalidOperationException("Bu eşleşme iptal edilemez.");
+
+            Status = MatchStatus.Cancelled;
+            RespondedAt = utcNow;
+            AddDomainEvent(new MatchCancelledEvent(Id, UserAId, UserBId));
+            EnsureInvariants();
+        }
+
+        public void Expire(DateTime utcNow)
+        {
+            if (Status != MatchStatus.Pending) return;
+
+            Status = MatchStatus.Expired;
+            RespondedAt = utcNow;
+            AddDomainEvent(new MatchExpiredEvent(Id, UserAId, UserBId));
+            EnsureInvariants();
+        }
+
         public void EnsureInvariants()
         {
             if (UserAId >= UserBId)
                 throw new InvalidOperationException("INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalıdır.");
 
-            if (Status == MatchStatus.Pending && RespondedAt.HasValue)
-                throw new InvalidOperationException("INVARIANT VIOLATION: Pending statüsünde RespondedAt dolu olamaz.");
-
-            if (Status != MatchStatus.Pending && !RespondedAt.HasValue)
+            if (Status != MatchStatus.Pending && RespondedAt == null)
                 throw new InvalidOperationException("INVARIANT VIOLATION: İşlem görmüş eşleşmede RespondedAt boş olamaz.");
         }
 
-        // --- STATE TRANSITION METHODS (DAVRANIŞLAR & EVENTS) ---
-
-        // 1. KABUL ETME
-        public void Accept()
+        private void AddDomainEvent(IInternalDomainEvent domainEvent)
         {
-            if (Status != MatchStatus.Pending)
-                throw new InvalidOperationException($"Match kabul edilemez. Mevcut durum: {Status}");
-
-            // Süre kontrolü
-            if (DateTime.UtcNow > ExpiresAt)
-            {
-                Expire();
-                throw new InvalidOperationException("Match süresi dolduğu için kabul edilemedi.");
-            }
-
-            Status = MatchStatus.Accepted;
-            RespondedAt = DateTime.UtcNow;
-
-            // EVENT GENERATION: MatchAccepted
-            AddDomainEvent(new MatchAcceptedEvent(Id, UserAId, UserBId));
+            _domainEvents.Add(domainEvent);
         }
 
-        // 2. REDDETME
-        public void Reject()
+        void IHasDomainEvents.ClearDomainEvents()
         {
-            if (Status != MatchStatus.Pending)
-                throw new InvalidOperationException($"Match reddedilemez. Mevcut durum: {Status}");
-
-            Status = MatchStatus.Rejected;
-            RespondedAt = DateTime.UtcNow;
-
-            // EVENT GENERATION: MatchRejected
-            AddDomainEvent(new MatchRejectedEvent(Id, 0));
-        }
-
-        // 3. İPTAL ETME / EŞLEŞMEYİ BOZMA (Unmatch)
-        public void Cancel()
-        {
-            if (Status != MatchStatus.Pending && Status != MatchStatus.Accepted)
-                throw new InvalidOperationException($"Match iptal edilemez. Mevcut durum: {Status}");
-
-            Status = MatchStatus.Cancelled;
-            RespondedAt = DateTime.UtcNow;
-
-            // EVENT GENERATION: MatchCancelled
-            AddDomainEvent(new MatchCancelledEvent(Id));
-        }
-
-        // 4. SÜRE AŞIMI
-        public void Expire()
-        {
-            if (Status != MatchStatus.Pending) return;
-
-            // Guard: Süre gerçekten doldu mu?
-            if (DateTime.UtcNow <= ExpiresAt)
-                throw new InvalidOperationException("Henüz süresi dolmamış bir Match expire edilemez.");
-
-            Status = MatchStatus.Expired;
-            RespondedAt = DateTime.UtcNow;
-
-            // EVENT GENERATION: MatchExpired
-            AddDomainEvent(new MatchExpiredEvent(Id));
+            _domainEvents.Clear();
         }
     }
 }
