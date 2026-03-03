@@ -94,7 +94,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
 
             Func<Task> act = async () => await context.SaveChangesAsync();
             await act.Should().ThrowAsync<InvalidOperationException>()
-               .WithMessage("*INVARIANT VIOLATION: Ýþlem görmüþ eþleþmede RespondedAt boþ olamaz*");
+               .WithMessage("*Accepted statüsünde RespondedAt dolu olmalýdýr*");
         }
 
         [Fact]
@@ -105,7 +105,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
             var propertyInfo = typeof(Match).GetProperty("UserAId", BindingFlags.Public | BindingFlags.Instance);
             propertyInfo!.DeclaringType!.GetProperty("UserAId")!.SetValue(match, 10, BindingFlags.NonPublic | BindingFlags.SetProperty, null, null, null);
 
-            Action act = () => match.EnsureInvariants();
+            Action act = () => match.EnsureInvariants(DateTime.UtcNow);
             act.Should().Throw<InvalidOperationException>()
                .WithMessage("*INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalýdýr*");
         }

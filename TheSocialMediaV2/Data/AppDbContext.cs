@@ -29,7 +29,6 @@ namespace TheSocialMediaV2.API.Data
             {
                 entity.UsePropertyAccessMode(PropertyAccessMode.Field);
 
-                // YENİ: SQL SERVER CHECK CONSTRAINTS (DB SEVİYESİ KALKANLAR)
                 entity.ToTable(t =>
                 {
                     t.HasCheckConstraint("CK_Match_UserNormalization", "[UserAId] < [UserBId]");
@@ -193,7 +192,7 @@ namespace TheSocialMediaV2.API.Data
 
             foreach (var match in matches)
             {
-                match.EnsureInvariants();
+                match.EnsureInvariants(DateTime.UtcNow);
             }
 
             ConvertDomainEventsToOutboxMessages();

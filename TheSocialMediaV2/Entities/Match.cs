@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using TheSocialMediaV2.API.Events;
 
 namespace TheSocialMediaV2.API.Entities
@@ -45,7 +47,9 @@ namespace TheSocialMediaV2.API.Entities
             };
 
             match.AddDomainEvent(new MatchCreatedEvent(match.UserAId, match.UserBId, match.ExpiresAt));
-            match.EnsureInvariants();
+
+            // GÜNCELLEME: utcNow parametresi geçildi
+            match.EnsureInvariants(utcNow);
             return match;
         }
 
@@ -62,7 +66,9 @@ namespace TheSocialMediaV2.API.Entities
             Status = MatchStatus.Accepted;
             RespondedAt = utcNow;
             AddDomainEvent(new MatchAcceptedEvent(Id, UserAId, UserBId));
-            EnsureInvariants();
+
+            // GÜNCELLEME: utcNow parametresi geçildi
+            EnsureInvariants(utcNow);
         }
 
         public void Reject(DateTime utcNow)
@@ -73,7 +79,9 @@ namespace TheSocialMediaV2.API.Entities
             Status = MatchStatus.Rejected;
             RespondedAt = utcNow;
             AddDomainEvent(new MatchRejectedEvent(Id, UserAId, UserBId));
-            EnsureInvariants();
+
+            // GÜNCELLEME: utcNow parametresi geçildi
+            EnsureInvariants(utcNow);
         }
 
         public void Cancel(DateTime utcNow)
@@ -84,7 +92,9 @@ namespace TheSocialMediaV2.API.Entities
             Status = MatchStatus.Cancelled;
             RespondedAt = utcNow;
             AddDomainEvent(new MatchCancelledEvent(Id, UserAId, UserBId));
-            EnsureInvariants();
+
+            // GÜNCELLEME: utcNow parametresi geçildi
+            EnsureInvariants(utcNow);
         }
 
         public void Expire(DateTime utcNow)
@@ -94,16 +104,52 @@ namespace TheSocialMediaV2.API.Entities
             Status = MatchStatus.Expired;
             RespondedAt = utcNow;
             AddDomainEvent(new MatchExpiredEvent(Id, UserAId, UserBId));
-            EnsureInvariants();
+
+            // GÜNCELLEME: utcNow parametresi geçildi
+            EnsureInvariants(utcNow);
         }
 
-        public void EnsureInvariants()
+        // --- GÜNCELLEME: TAM DURUM MATRİSİ (STATE-COHERENCE MATRIX) ---
+        public void EnsureInvariants(DateTime utcNow)
         {
+            // 1. Core Relational Invariant
             if (UserAId >= UserBId)
                 throw new InvalidOperationException("INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalıdır.");
 
-            if (Status != MatchStatus.Pending && RespondedAt == null)
-                throw new InvalidOperationException("INVARIANT VIOLATION: İşlem görmüş eşleşmede RespondedAt boş olamaz.");
+            // 2. Time-Travel & Creation Coherence
+            if (ExpiresAt <= CreatedAt)
+                throw new InvalidOperationException("INVARIANT VIOLATION: ExpiresAt, CreatedAt'ten büyük olmalıdır.");
+
+            // 3. State-Coherence Matrix (Durum Tutarlılığı)
+            switch (Status)
+            {
+                case MatchStatus.Pending:
+                    if (RespondedAt.HasValue)
+                        throw new InvalidOperationException("INVARIANT VIOLATION: Pending statüsünde RespondedAt NULL olmalıdır.");
+                    break;
+
+                case MatchStatus.Accepted:
+                case MatchStatus.Rejected:
+                case MatchStatus.Cancelled:
+                    if (!RespondedAt.HasValue)
+                        throw new InvalidOperationException($"INVARIANT VIOLATION: {Status} statüsünde RespondedAt dolu olmalıdır.");
+                    if (RespondedAt.Value > ExpiresAt)
+                        throw new InvalidOperationException($"INVARIANT VIOLATION: {Status} statüsünde işlem tarihi (RespondedAt), son kullanma tarihinden (ExpiresAt) büyük olamaz.");
+                    break;
+
+                case MatchStatus.Expired:
+                    if (!RespondedAt.HasValue)
+                        throw new InvalidOperationException("INVARIANT VIOLATION: Expired statüsünde RespondedAt dolu olmalıdır.");
+                    // KİLL SHOT: Kritik zaman kontrolü
+                    if (utcNow < ExpiresAt)
+                        throw new InvalidOperationException("INVARIANT VIOLATION: Expired statüsüne geçebilmek için anlık zamanın (utcNow), ExpiresAt'i geçmiş veya ona eşit olması gerekir.");
+                    if (RespondedAt.Value < ExpiresAt)
+                        throw new InvalidOperationException("INVARIANT VIOLATION: Expired olan bir eşleşmenin RespondedAt değeri, ExpiresAt'ten küçük olamaz.");
+                    break;
+
+                default:
+                    throw new InvalidOperationException("INVARIANT VIOLATION: Bilinmeyen eşleşme statüsü.");
+            }
         }
 
         private void AddDomainEvent(IInternalDomainEvent domainEvent)
