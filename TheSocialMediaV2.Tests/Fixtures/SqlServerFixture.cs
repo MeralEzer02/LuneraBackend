@@ -13,10 +13,10 @@ namespace TheSocialMediaV2.API.Tests.Fixtures
         {
             _dbContainer = new MsSqlBuilder()
                 .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-                .WithPassword("Strong_Password_123!")
+                .WithPassword("SqlTest_Password_123!")
                 .Build();
         }
-
+                            
         public string ConnectionString => _dbContainer.GetConnectionString();
 
         public async Task InitializeAsync()

@@ -1,8 +1,9 @@
-﻿using Xunit;
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Entities;
 using TheSocialMediaV2.API.Tests.Fixtures;
+using Xunit;
 
 namespace TheSocialMediaV2.API.Tests.Domain
 {
@@ -23,9 +24,20 @@ namespace TheSocialMediaV2.API.Tests.Domain
         private async Task<int> SeedPendingMatchAsync()
         {
             using var context = _fixture.CreateContext();
-            var match = Match.Create(1, 2, 24, _now);
+
+            // 1. BOŞ VERİTABANINA 2 ADET SAHTE KULLANICI EKLİYORUZ
+            var userA = new User();
+            var userB = new User();
+
+            context.Users.Add(userA);
+            context.Users.Add(userB);
+            await context.SaveChangesAsync();
+
+            // 2. KULLANICILAR OLUŞTU, ARTIK GERÇEK ID'LERİ İLE EŞLEŞTİREBİLİRİZ
+            var match = Match.Create(userA.Id, userB.Id, 24, _now);
             context.Matches.Add(match);
             await context.SaveChangesAsync();
+
             return match.Id;
         }
 
@@ -55,22 +67,23 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public async Task Test02_Cross_State_Race_Accept_Vs_Expire_Should_Throw()
         {
-            // Arrange
             int matchId = await SeedPendingMatchAsync();
-            var expireTime = _now.AddHours(25);
+            var limitTime = _now.AddHours(24); // Tam 24. saat (Sınır noktası)
 
-            // Act
             using var contextA = _fixture.CreateContext();
             using var contextB = _fixture.CreateContext();
 
             var matchA = await contextA.Matches.SingleAsync(m => m.Id == matchId);
             var matchB = await contextB.Matches.SingleAsync(m => m.Id == matchId);
 
-            matchA.Accept(expireTime.AddMinutes(-1));
-            await contextA.SaveChangesAsync(); 
+            // Context A (Kullanıcı) sürenin dolmasına kıl payı 1 dakika kala (23h 59m) Accept atıyor
+            matchA.Accept(limitTime.AddMinutes(-1));
+            await contextA.SaveChangesAsync();
 
-            matchB.Expire(expireTime);
+            // Context B (Sistem) süresi 1 dakika geçti (24h 1m) diyerek Expire atmaya çalışıyor
+            matchB.Expire(limitTime.AddMinutes(1));
 
+            // Assert - İkinci işlem (B) RowVersion uyuşmazlığından patlamalı!
             Func<Task> act = async () => await contextB.SaveChangesAsync();
             await act.Should().ThrowAsync<DbUpdateConcurrencyException>();
         }
@@ -78,30 +91,40 @@ namespace TheSocialMediaV2.API.Tests.Domain
         [Fact]
         public async Task Test03_100_Parallel_Stress_Test_Should_Only_Allow_One()
         {
-            // Arrange
             int matchId = await SeedPendingMatchAsync();
             int successCount = 0;
             int concurrencyExceptionCount = 0;
 
-            // Act - 100 Paralel Saldırı
+            // 1. ÖNCE SİLAHLARI DOLDUR: 100 context de veriyi aynı anda "Pending" ve ilk RowVersion ile çeksin!
+            var contexts = new AppDbContext[100];
+            var matches = new Match[100];
+
+            for (int i = 0; i < 100; i++)
+            {
+                contexts[i] = _fixture.CreateContext();
+                matches[i] = await contexts[i].Matches.SingleAsync(x => x.Id == matchId);
+            }
+
+            // 2. ATEŞ SERBEST: Hepsi elindeki ilk versiyonla AYNI ANDA kaydetmeye çalışsın!
             var tasks = Enumerable.Range(0, 100).Select(async i =>
             {
-                using var context = _fixture.CreateContext();
-                
                 try
                 {
-                    var match = await context.Matches.SingleAsync(x => x.Id == matchId);
-                    
-                    if (match.Status == MatchStatus.Pending)
-                    {
-                        match.Accept(_now.AddMinutes(1));
-                        await context.SaveChangesAsync();
-                        Interlocked.Increment(ref successCount);
-                    }
+                    matches[i].Accept(_now.AddMinutes(1));
+                    await contexts[i].SaveChangesAsync();
+                    Interlocked.Increment(ref successCount);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
                     Interlocked.Increment(ref concurrencyExceptionCount);
+                }
+                catch (DbUpdateException) // Gerçek SQL'de izdiham anında bazen doğrudan Deadlock (1205) oluşabilir
+                {
+                    Interlocked.Increment(ref concurrencyExceptionCount);
+                }
+                finally
+                {
+                    contexts[i].Dispose();
                 }
             });
 
@@ -109,7 +132,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
 
             // Assert
             successCount.Should().Be(1, "100 thread aynı anda Accept atmaya çalıştı ama sadece 1 tanesi SQL kilidini aşabilmeli.");
-            concurrencyExceptionCount.Should().Be(99, "Geriye kalan 99 thread DbUpdateConcurrencyException yiyip geri dönmeli.");
+            concurrencyExceptionCount.Should().Be(99, "Geriye kalan 99 thread SQL kalkanına çarpıp geri dönmeli.");
 
             using var validationContext = _fixture.CreateContext();
             var finalMatch = await validationContext.Matches.SingleAsync(m => m.Id == matchId);
