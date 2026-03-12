@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TheSocialMediaV2.API.Events
+namespace TheSocialMediaV2.Domain.Events
 {
     public record MatchCreatedEvent(int UserAId, int UserBId, DateTime ExpiresAt) : IInternalDomainEvent
     {

@@ -1,7 +1,7 @@
 ﻿using Xunit;
 using FluentAssertions;
 using System.Reflection;
-using TheSocialMediaV2.API.Entities;
+using TheSocialMediaV2.Domain.Entities;
 
 namespace TheSocialMediaV2.API.Tests.Domain
 {

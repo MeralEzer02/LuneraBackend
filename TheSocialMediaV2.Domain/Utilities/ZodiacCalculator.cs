@@ -1,8 +1,7 @@
 ﻿using System;
-using TheSocialMediaV2.API.Enums; // Enum'ları buradan çekecek
+using TheSocialMediaV2.Domain.Enums; // Enum'ları buradan çekecek
 
-namespace TheSocialMediaV2.API.Utilities
-{
+namespace TheSocialMediaV2.Domain.Utilities;
     public static class ZodiacCalculator
     {
         // Tuple yapısı ile gün ve burç eşleşmesi
@@ -37,4 +36,3 @@ namespace TheSocialMediaV2.API.Utilities
             return ZodiacSign.Capricorn;
         }
     }
-}

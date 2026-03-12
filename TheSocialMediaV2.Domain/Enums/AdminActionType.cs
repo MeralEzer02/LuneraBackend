@@ -1,4 +1,4 @@
-﻿namespace TheSocialMediaV2.API.Enums
+﻿namespace TheSocialMediaV2.Domain.Enums
 {
     public enum AdminActionType
     {

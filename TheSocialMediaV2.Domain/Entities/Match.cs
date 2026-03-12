@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using TheSocialMediaV2.API.Events;
+using TheSocialMediaV2.Domain.Events;
 
-namespace TheSocialMediaV2.API.Entities
+namespace TheSocialMediaV2.Domain.Entities
 {
     public enum MatchStatus { Pending = 1, Accepted = 2, Rejected = 3, Cancelled = 4, Expired = 5 }
 

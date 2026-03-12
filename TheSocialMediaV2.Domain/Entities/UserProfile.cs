@@ -1,8 +1,8 @@
 ﻿using System;
-using TheSocialMediaV2.API.Enums;
-using TheSocialMediaV2.API.Utilities;
+using TheSocialMediaV2.Domain.Enums;
+using TheSocialMediaV2.Domain.Utilities;
 
-namespace TheSocialMediaV2.API.Entities
+namespace TheSocialMediaV2.Domain.Entities
 {
     public class UserProfile
     {

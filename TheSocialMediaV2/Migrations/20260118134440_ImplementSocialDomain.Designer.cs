@@ -25,7 +25,7 @@ namespace TheSocialMediaV2.API.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.AdminActionLog", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.AdminActionLog", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -51,7 +51,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("AdminActionLogs");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Match", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Match", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -83,7 +83,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Matches");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Message", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Message", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -116,7 +116,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Messages");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Report", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Report", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -145,7 +145,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Reports");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.User", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -178,7 +178,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.UserProfile", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.UserProfile", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -218,15 +218,15 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("UserProfiles");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Match", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Match", b =>
                 {
-                    b.HasOne("TheSocialMediaV2.API.Entities.User", "UserA")
+                    b.HasOne("TheSocialMediaV2.Domain.Entities.User", "UserA")
                         .WithMany("MatchesAsUserA")
                         .HasForeignKey("UserAId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TheSocialMediaV2.API.Entities.User", "UserB")
+                    b.HasOne("TheSocialMediaV2.Domain.Entities.User", "UserB")
                         .WithMany("MatchesAsUserB")
                         .HasForeignKey("UserBId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -237,15 +237,15 @@ namespace TheSocialMediaV2.API.Migrations
                     b.Navigation("UserB");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Message", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Message", b =>
                 {
-                    b.HasOne("TheSocialMediaV2.API.Entities.Match", "Match")
+                    b.HasOne("TheSocialMediaV2.Domain.Entities.Match", "Match")
                         .WithMany()
                         .HasForeignKey("MatchId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TheSocialMediaV2.API.Entities.User", "Sender")
+                    b.HasOne("TheSocialMediaV2.Domain.Entities.User", "Sender")
                         .WithMany("SentMessages")
                         .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -256,16 +256,16 @@ namespace TheSocialMediaV2.API.Migrations
                     b.Navigation("Sender");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.UserProfile", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.UserProfile", b =>
                 {
-                    b.HasOne("TheSocialMediaV2.API.Entities.User", null)
+                    b.HasOne("TheSocialMediaV2.Domain.Entities.User", null)
                         .WithOne("UserProfile")
-                        .HasForeignKey("TheSocialMediaV2.API.Entities.UserProfile", "UserId")
+                        .HasForeignKey("TheSocialMediaV2.Domain.Entities.UserProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.User", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.User", b =>
                 {
                     b.Navigation("MatchesAsUserA");
 

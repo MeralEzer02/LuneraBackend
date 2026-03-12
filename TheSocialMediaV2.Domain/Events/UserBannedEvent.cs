@@ -1,4 +1,4 @@
-﻿namespace TheSocialMediaV2.API.Events
+﻿namespace TheSocialMediaV2.Domain.Events
 {
     public class UserBannedEvent : IInternalDomainEvent
     {

@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TheSocialMediaV2.API.Data;
-using TheSocialMediaV2.API.Events;
+using TheSocialMediaV2.Domain.Events;
 
 namespace TheSocialMediaV2.API.Services
 {

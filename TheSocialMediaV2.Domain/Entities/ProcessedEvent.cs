@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace TheSocialMediaV2.API.Entities
+namespace TheSocialMediaV2.Domain.Entities
 {
     public class ProcessedEvent
     {

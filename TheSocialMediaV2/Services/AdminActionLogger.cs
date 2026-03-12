@@ -1,6 +1,6 @@
 ﻿using TheSocialMediaV2.API.Data;
-using TheSocialMediaV2.API.Entities;
-using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
 
 namespace TheSocialMediaV2.API.Services
 {

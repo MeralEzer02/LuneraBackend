@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.Domain.Enums;
 
-namespace TheSocialMediaV2.API.Entities
+namespace TheSocialMediaV2.Domain.Entities
 {
     public class AdminActionLog
     {

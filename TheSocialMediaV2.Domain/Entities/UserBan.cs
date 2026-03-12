@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace TheSocialMediaV2.API.Entities
+namespace TheSocialMediaV2.Domain.Entities
 {
     public class UserBan
     {

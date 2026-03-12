@@ -1,8 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 
-namespace TheSocialMediaV2.API.Utilities
-{
+namespace TheSocialMediaV2.Domain.Utilities;
     public static class PasswordHasher
     {
         public static string HashPassword(string password)
@@ -26,4 +25,3 @@ namespace TheSocialMediaV2.API.Utilities
             return hashOfInput == hashedPassword;
         }
     }
-}

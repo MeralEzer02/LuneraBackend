@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
-using TheSocialMediaV2.API.Entities;
-using TheSocialMediaV2.API.Enums;
-using TheSocialMediaV2.API.Events;
+using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Events;
 using TheSocialMediaV2.API.Services;
+using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
+using TheSocialMediaV2.Domain.Events;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -35,7 +37,7 @@ namespace TheSocialMediaV2.API.Controllers
             {
                 TotalUsers = await _context.Users.CountAsync(),
                 // DÜZELTME: Enum kullanımı netleştirildi (Entities.MatchStatus.Accepted)
-                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == Entities.MatchStatus.Accepted),
+                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == Domain.Entities.MatchStatus.Accepted),
                 TotalMessages = await _context.Messages.CountAsync(),
                 BannedUsers = await _context.Users.CountAsync(u => u.Status == 2)
             };

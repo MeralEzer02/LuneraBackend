@@ -1,5 +1,5 @@
 ﻿using System.Threading.Tasks;
-using TheSocialMediaV2.API.Enums;
+using TheSocialMediaV2.Domain.Enums;
 
 namespace TheSocialMediaV2.API.Services
 {

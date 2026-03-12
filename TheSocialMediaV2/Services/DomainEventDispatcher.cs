@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using TheSocialMediaV2.Domain.Events;
 
-namespace TheSocialMediaV2.API.Events
+namespace TheSocialMediaV2.API.Services
 {
     public class DomainEventDispatcher : IInternalDomainEventDispatcher
     {

@@ -1,10 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using TheSocialMediaV2.API.Data;
-using TheSocialMediaV2.API.Entities;
-using TheSocialMediaV2.API.Enums;
-using TheSocialMediaV2.API.Events;
+using TheSocialMediaV2.Domain.Enums;
+using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Events;
 
-namespace TheSocialMediaV2.API.Events
+namespace TheSocialMediaV2.API.Services
 {
     public class UserBannedEventHandler : IInternalDomainEventHandler<UserBannedEvent>
     {

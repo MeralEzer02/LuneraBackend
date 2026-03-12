@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace TheSocialMediaV2.API.Events
+namespace TheSocialMediaV2.Domain.Events
 {
     public interface IHasDomainEvents
     {

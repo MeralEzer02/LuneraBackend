@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using TheSocialMediaV2.API.Data;
-using TheSocialMediaV2.API.Entities;
+using TheSocialMediaV2.Domain.Entities;
 using Xunit;
 
 namespace TheSocialMediaV2.API.Tests.Domain

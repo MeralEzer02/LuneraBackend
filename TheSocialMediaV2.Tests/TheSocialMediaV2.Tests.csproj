@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TheSocialMediaV2.Application\TheSocialMediaV2.Application.csproj" />
+    <ProjectReference Include="..\TheSocialMediaV2.Domain\TheSocialMediaV2.Domain.csproj" />
     <ProjectReference Include="..\TheSocialMediaV2\TheSocialMediaV2.API.csproj" />
   </ItemGroup>
 

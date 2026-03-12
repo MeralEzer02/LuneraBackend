@@ -25,7 +25,7 @@ namespace TheSocialMediaV2.API.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.AdminActionLog", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.AdminActionLog", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -51,7 +51,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("AdminActionLogs");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Match", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Match", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -79,7 +79,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Matches");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Message", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Message", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -108,7 +108,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Messages");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.Report", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.Report", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -137,7 +137,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Reports");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.User", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -170,7 +170,7 @@ namespace TheSocialMediaV2.API.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("TheSocialMediaV2.API.Entities.UserProfile", b =>
+            modelBuilder.Entity("TheSocialMediaV2.Domain.Entities.UserProfile", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()

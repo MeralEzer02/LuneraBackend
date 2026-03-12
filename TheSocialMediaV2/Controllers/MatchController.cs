@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
-using TheSocialMediaV2.API.Entities;
 using TheSocialMediaV2.API.DTOs;
+using TheSocialMediaV2.Domain.Entities;
 
 namespace TheSocialMediaV2.API.Controllers
 {
