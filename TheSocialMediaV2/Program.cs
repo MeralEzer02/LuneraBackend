@@ -100,6 +100,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseMiddleware<TheSocialMediaV2.API.Middlewares.ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 

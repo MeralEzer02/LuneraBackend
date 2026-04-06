@@ -5,6 +5,7 @@ using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -39,7 +40,7 @@ namespace TheSocialMediaV2.API.Controllers
                 return StatusCode(403, "Bu konuşmaya mesaj atma yetkiniz yok!");
             }
 
-            // D. Eşleşme Aktif mi? (DÜZELTME: Accepted kontrolü)
+            // D. Eşleşme Aktif mi? 
             if (match.Status != MatchStatus.Accepted)
             {
                 return BadRequest("Bu eşleşme henüz kabul edilmemiş veya sona ermiş. Mesaj atılamaz.");

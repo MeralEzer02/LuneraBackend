@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using TheSocialMediaV2.Domain.Events;
+using TheSocialMediaV2.Domain.Enums;
 
 namespace TheSocialMediaV2.Domain.Entities
 {
-    public enum MatchStatus { Pending = 1, Accepted = 2, Rejected = 3, Cancelled = 4, Expired = 5 }
-
     public class Match : IHasDomainEvents
     {
         public int Id { get; private set; }
@@ -48,7 +47,6 @@ namespace TheSocialMediaV2.Domain.Entities
 
             match.AddDomainEvent(new MatchCreatedEvent(match.UserAId, match.UserBId, match.ExpiresAt));
 
-            // GÜNCELLEME: utcNow parametresi geçildi
             match.EnsureInvariants(utcNow);
             return match;
         }
@@ -67,7 +65,6 @@ namespace TheSocialMediaV2.Domain.Entities
             RespondedAt = utcNow;
             AddDomainEvent(new MatchAcceptedEvent(Id, UserAId, UserBId));
 
-            // GÜNCELLEME: utcNow parametresi geçildi
             EnsureInvariants(utcNow);
         }
 
@@ -80,7 +77,6 @@ namespace TheSocialMediaV2.Domain.Entities
             RespondedAt = utcNow;
             AddDomainEvent(new MatchRejectedEvent(Id, UserAId, UserBId));
 
-            // GÜNCELLEME: utcNow parametresi geçildi
             EnsureInvariants(utcNow);
         }
 
@@ -93,7 +89,6 @@ namespace TheSocialMediaV2.Domain.Entities
             RespondedAt = utcNow;
             AddDomainEvent(new MatchCancelledEvent(Id, UserAId, UserBId));
 
-            // GÜNCELLEME: utcNow parametresi geçildi
             EnsureInvariants(utcNow);
         }
 
@@ -105,22 +100,17 @@ namespace TheSocialMediaV2.Domain.Entities
             RespondedAt = utcNow;
             AddDomainEvent(new MatchExpiredEvent(Id, UserAId, UserBId));
 
-            // GÜNCELLEME: utcNow parametresi geçildi
             EnsureInvariants(utcNow);
         }
 
-        // --- GÜNCELLEME: TAM DURUM MATRİSİ (STATE-COHERENCE MATRIX) ---
         public void EnsureInvariants(DateTime utcNow)
         {
-            // 1. Core Relational Invariant
             if (UserAId >= UserBId)
                 throw new InvalidOperationException("INVARIANT VIOLATION: UserAId her zaman UserBId'den küçük olmalıdır.");
 
-            // 2. Time-Travel & Creation Coherence
             if (ExpiresAt <= CreatedAt)
                 throw new InvalidOperationException("INVARIANT VIOLATION: ExpiresAt, CreatedAt'ten büyük olmalıdır.");
 
-            // 3. State-Coherence Matrix (Durum Tutarlılığı)
             switch (Status)
             {
                 case MatchStatus.Pending:
@@ -140,7 +130,6 @@ namespace TheSocialMediaV2.Domain.Entities
                 case MatchStatus.Expired:
                     if (!RespondedAt.HasValue)
                         throw new InvalidOperationException("INVARIANT VIOLATION: Expired statüsünde RespondedAt dolu olmalıdır.");
-                    // KİLL SHOT: Kritik zaman kontrolü
                     if (utcNow < ExpiresAt)
                         throw new InvalidOperationException("INVARIANT VIOLATION: Expired statüsüne geçebilmek için anlık zamanın (utcNow), ExpiresAt'i geçmiş veya ona eşit olması gerekir.");
                     if (RespondedAt.Value < ExpiresAt)

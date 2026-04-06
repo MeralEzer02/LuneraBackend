@@ -2,8 +2,9 @@
 using FluentAssertions;
 using System.Reflection;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
 
-namespace TheSocialMediaV2.API.Tests.Domain
+namespace TheSocialMediaV2.Tests.Domain
 {
     public class MatchInvariantTests
     {
@@ -12,7 +13,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
 
         private Match CreateHackedMatch(int userA, int userB, MatchStatus status, DateTime? respondedAt, DateTime expiresAt)
         {
-            var match = Match.Create(1, 2, 24, _now); // Dummy creation
+            var match = Match.Create(1, 2, 24, _now);
             typeof(Match).GetProperty("UserAId")!.SetValue(match, userA);
             typeof(Match).GetProperty("UserBId")!.SetValue(match, userB);
             typeof(Match).GetProperty("Status")!.SetValue(match, status);
@@ -84,13 +85,11 @@ namespace TheSocialMediaV2.API.Tests.Domain
 
         [Fact]
         public void Inv12_Expired_When_UtcNow_Is_Before_ExpiresAt_Should_Throw() =>
-            // Zaman henüz dolmamış (_now < _expiresAt) ama birisi statüyü Expired yapmış!
             FluentActions.Invoking(() => CreateHackedMatch(1, 2, MatchStatus.Expired, _now, _expiresAt).EnsureInvariants(_now))
                 .Should().Throw<InvalidOperationException>().WithMessage("*anlık zamanın (utcNow), ExpiresAt'i geçmiş veya ona eşit olması gerekir*");
 
         [Fact]
         public void Inv13_Expired_With_RespondedAt_Before_ExpiresAt_Should_Throw() =>
-            // Zaman geçmiş (_now > _expiresAt) ama işlem tarihi (RespondedAt) geçmişte atılmış (Zaman tutarsızlığı)
             FluentActions.Invoking(() => CreateHackedMatch(1, 2, MatchStatus.Expired, _now, _expiresAt).EnsureInvariants(_expiresAt.AddHours(1)))
                 .Should().Throw<InvalidOperationException>().WithMessage("*RespondedAt değeri, ExpiresAt'ten küçük olamaz*");
 
@@ -107,7 +106,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
 
         [Fact]
         public void Inv16_Valid_Expired_Should_Pass() =>
-            // _now, ExpiresAt'i geçmiş. RespondedAt tam Expire olma anı. Kusursuz!
             FluentActions.Invoking(() => CreateHackedMatch(1, 2, MatchStatus.Expired, _expiresAt, _expiresAt).EnsureInvariants(_expiresAt.AddMinutes(5)))
                 .Should().NotThrow();
     }

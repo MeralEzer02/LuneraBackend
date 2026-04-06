@@ -2,8 +2,10 @@
 {
     public enum MatchStatus
     {
-        Active = 1,
-        Ended = 2,
-        Blocked = 3
+        Pending = 0,
+        Accepted = 1,
+        Rejected = 2,
+        Cancelled = 3,
+        Expired = 4
     }
 }

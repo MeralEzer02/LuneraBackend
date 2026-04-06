@@ -5,11 +5,9 @@ using System.Security.Claims;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.Domain.Entities;
-using TheSocialMediaV2.Domain.Events;
-using TheSocialMediaV2.API.Services;
-using TheSocialMediaV2.Domain.Entities;
 using TheSocialMediaV2.Domain.Enums;
 using TheSocialMediaV2.Domain.Events;
+using TheSocialMediaV2.API.Services;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -36,17 +34,13 @@ namespace TheSocialMediaV2.API.Controllers
             var stats = new
             {
                 TotalUsers = await _context.Users.CountAsync(),
-                // DÜZELTME: Enum kullanımı netleştirildi (Entities.MatchStatus.Accepted)
-                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == Domain.Entities.MatchStatus.Accepted),
+                ActiveMatches = await _context.Matches.CountAsync(m => m.Status == MatchStatus.Accepted),
                 TotalMessages = await _context.Messages.CountAsync(),
                 BannedUsers = await _context.Users.CountAsync(u => u.Status == 2)
             };
 
             return Ok(stats);
         }
-
-        // ... (BanUser, UnbanUser, GetPendingReports, ResolveReport metodları AYNI KALACAK) ...
-        // ... (Bu metodlarda zaten hata yoktu, sadece yukarıdaki MatchStatus hatası düzeltildi) ...
 
         // 2. KULLANICI BANLAMA
         [HttpPost("ban-user/{userId}")]

@@ -10,4 +10,13 @@
     <ProjectReference Include="..\TheSocialMediaV2.Domain\TheSocialMediaV2.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Matches\Queries\" />
+    <Folder Include="DTOs\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="14.1.0" />
+  </ItemGroup>
+
 </Project>

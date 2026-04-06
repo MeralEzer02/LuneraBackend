@@ -2,12 +2,12 @@
 using FluentAssertions;
 using TheSocialMediaV2.Domain.Events;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
 
-namespace TheSocialMediaV2.API.Tests.Domain
+namespace TheSocialMediaV2.Tests.Domain
 {
     public class MatchStateMachineTests
     {
-        // Sabit, deterministik bir zaman noktası belirliyoruz!
         private readonly DateTime _now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
         [Fact]
@@ -42,7 +42,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
         {
             var match = Match.Create(1, 2, 24, _now);
             match.Accept(_now);
-            match.Cancel(_now); // Eşleşmeyi boz (Unmatch)
+            match.Cancel(_now);
             match.Status.Should().Be(MatchStatus.Cancelled);
         }
 
@@ -51,8 +51,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
         {
             var match = Match.Create(1, 2, 24, _now);
 
-            // 🔥 ZAMAN YOLCULUĞU BURADA! (Reflection Hack bitti!)
-            // Zamanı 25 saat ileri sarıyoruz.
             var futureTime = _now.AddHours(25);
 
             match.Expire(futureTime);
@@ -104,7 +102,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
         public void Action_Accept_When_Time_Is_Up_Should_AutoExpire_And_Throw()
         {
             var match = Match.Create(1, 2, 24, _now);
-            var futureTime = _now.AddHours(25); // Geç kalındı
+            var futureTime = _now.AddHours(25);
 
             Action act = () => match.Accept(futureTime);
 

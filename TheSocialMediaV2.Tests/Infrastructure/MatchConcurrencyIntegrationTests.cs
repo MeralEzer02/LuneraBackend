@@ -3,9 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.Tests.Fixtures;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Domain.Enums;
 using Xunit;
 
-namespace TheSocialMediaV2.API.Tests.Domain
+namespace TheSocialMediaV2.Tests.Infrastructure
 {
     [CollectionDefinition("SqlServerCollection")]
     public class SqlServerCollection : ICollectionFixture<SqlServerFixture> { }
@@ -25,7 +26,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
         {
             using var context = _fixture.CreateContext();
 
-            // 1. BOŞ VERİTABANINA 2 ADET SAHTE KULLANICI EKLİYORUZ
             var userA = new User();
             var userB = new User();
 
@@ -33,7 +33,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
             context.Users.Add(userB);
             await context.SaveChangesAsync();
 
-            // 2. KULLANICILAR OLUŞTU, ARTIK GERÇEK ID'LERİ İLE EŞLEŞTİREBİLİRİZ
             var match = Match.Create(userA.Id, userB.Id, 24, _now);
             context.Matches.Add(match);
             await context.SaveChangesAsync();
@@ -47,7 +46,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
             // Arrange
             int matchId = await SeedPendingMatchAsync();
 
-            // Act - Gerçek İzolasyon (İki farklı Scope/Context)
+            // Act - Gerçek İzolasyon
             using var contextA = _fixture.CreateContext();
             using var contextB = _fixture.CreateContext();
 
@@ -55,7 +54,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
             var matchB = await contextB.Matches.SingleAsync(m => m.Id == matchId);
 
             matchA.Accept(_now.AddMinutes(1));
-            await contextA.SaveChangesAsync(); 
+            await contextA.SaveChangesAsync();
 
             matchB.Cancel(_now.AddMinutes(2));
 
@@ -68,7 +67,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
         public async Task Test02_Cross_State_Race_Accept_Vs_Expire_Should_Throw()
         {
             int matchId = await SeedPendingMatchAsync();
-            var limitTime = _now.AddHours(24); // Tam 24. saat (Sınır noktası)
+            var limitTime = _now.AddHours(24);
 
             using var contextA = _fixture.CreateContext();
             using var contextB = _fixture.CreateContext();
@@ -95,7 +94,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
             int successCount = 0;
             int concurrencyExceptionCount = 0;
 
-            // 1. ÖNCE SİLAHLARI DOLDUR: 100 context de veriyi aynı anda "Pending" ve ilk RowVersion ile çeksin!
             var contexts = new AppDbContext[100];
             var matches = new Match[100];
 
@@ -105,7 +103,6 @@ namespace TheSocialMediaV2.API.Tests.Domain
                 matches[i] = await contexts[i].Matches.SingleAsync(x => x.Id == matchId);
             }
 
-            // 2. ATEŞ SERBEST: Hepsi elindeki ilk versiyonla AYNI ANDA kaydetmeye çalışsın!
             var tasks = Enumerable.Range(0, 100).Select(async i =>
             {
                 try
@@ -118,7 +115,7 @@ namespace TheSocialMediaV2.API.Tests.Domain
                 {
                     Interlocked.Increment(ref concurrencyExceptionCount);
                 }
-                catch (DbUpdateException) // Gerçek SQL'de izdiham anında bazen doğrudan Deadlock (1205) oluşabilir
+                catch (DbUpdateException)
                 {
                     Interlocked.Increment(ref concurrencyExceptionCount);
                 }
