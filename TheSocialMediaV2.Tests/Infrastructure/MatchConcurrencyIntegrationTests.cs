@@ -135,5 +135,68 @@ namespace TheSocialMediaV2.Tests.Infrastructure
             var finalMatch = await validationContext.Matches.SingleAsync(m => m.Id == matchId);
             finalMatch.Status.Should().Be(MatchStatus.Accepted);
         }
+
+        [Fact]
+        public async Task AcceptMatch_Concurrently_Should_Be_Idempotent_And_Concurrency_Safe()
+        {
+            using var setupContext = _fixture.CreateContext();
+            var now = DateTime.UtcNow;
+
+            var userA = new User();
+            var userB = new User();
+            setupContext.Users.AddRange(userA, userB);
+            await setupContext.SaveChangesAsync();
+
+            var match = Match.Create(userA.Id, userB.Id, 24, now);
+            setupContext.Matches.Add(match);
+            await setupContext.SaveChangesAsync();
+
+            setupContext.OutboxMessages.RemoveRange(setupContext.OutboxMessages);
+            await setupContext.SaveChangesAsync();
+
+            var matchId = match.Id;
+
+            var task1 = Task.Run(async () =>
+            {
+                using var context1 = _fixture.CreateContext();
+                var m1 = await context1.Matches.FindAsync(matchId);
+
+                if (m1!.Status == TheSocialMediaV2.Domain.Enums.MatchStatus.Accepted) return;
+
+                m1.Accept(now.AddMinutes(5));
+                await context1.SaveChangesAsync();
+            });
+
+            var task2 = Task.Run(async () =>
+            {
+                using var context2 = _fixture.CreateContext();
+                var m2 = await context2.Matches.FindAsync(matchId);
+
+                if (m2!.Status == TheSocialMediaV2.Domain.Enums.MatchStatus.Accepted) return;
+
+                m2.Accept(now.AddMinutes(5));
+                await context2.SaveChangesAsync();
+            });
+
+            var exception = await Record.ExceptionAsync(async () => await Task.WhenAll(task1, task2));
+
+            // Assert
+            if (exception != null)
+            {
+                var isConcurrencyEx = exception is DbUpdateConcurrencyException ||
+                                      exception.InnerException is DbUpdateConcurrencyException;
+                isConcurrencyEx.Should().BeTrue("Aynı anda yazmaya çalıştıkları için RowVersion patlamalıdır.");
+            }
+
+            using var verifyContext = _fixture.CreateContext();
+            var finalMatch = await verifyContext.Matches.FindAsync(matchId);
+
+            finalMatch!.Status.Should().Be(TheSocialMediaV2.Domain.Enums.MatchStatus.Accepted,
+                "Sonuç ne olursa olsun eşleşme KABUL EDİLMİŞ olmalıdır.");
+
+            var outboxCount = await verifyContext.OutboxMessages.CountAsync();
+            outboxCount.Should().Be(1,
+                "Duplicate (çift) event oluşmamalıdır! 2 istek gitse bile Outbox'ta sadece 1 adet MatchAcceptedEvent olmalıdır.");
+        }
     }
 }

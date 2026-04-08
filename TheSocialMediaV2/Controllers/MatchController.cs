@@ -1,10 +1,15 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Application.Matches.Commands;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -14,10 +19,12 @@ namespace TheSocialMediaV2.API.Controllers
     public class MatchController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IMediator _mediator;
 
-        public MatchController(AppDbContext context)
+        public MatchController(AppDbContext context, IMediator mediator)
         {
             _context = context;
+            _mediator = mediator;
         }
 
         // POST: api/match/find
@@ -33,7 +40,6 @@ namespace TheSocialMediaV2.API.Controllers
                 .Select(m => m.UserAId == myId ? m.UserBId : m.UserAId)
                 .ToListAsync();
 
-            // 3. Aday Havuzunu Oluştur
             var candidates = await _context.Users
                 .Where(u => u.Id != myId &&
                             u.Status == 1 &&
@@ -54,9 +60,6 @@ namespace TheSocialMediaV2.API.Controllers
             _context.Matches.Add(newMatch);
             await _context.SaveChangesAsync();
 
-            _context.Matches.Add(newMatch);
-            await _context.SaveChangesAsync();
-
             var result = new MatchResultDto
             {
                 MatchId = newMatch.Id,
@@ -71,6 +74,20 @@ namespace TheSocialMediaV2.API.Controllers
             };
 
             return Ok(result);
+        }
+
+        // POST: api/match/5/accept
+        [HttpPost("{id}/accept")]
+        public async Task<IActionResult> Accept(int id)
+        {
+            var myIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(myIdStr)) return Unauthorized();
+            int myId = int.Parse(myIdStr);
+
+            var command = new AcceptMatchCommand(id, myId);
+            await _mediator.Send(command);
+
+            return Ok(new { Message = "Eşleşme başarıyla kabul edildi!" });
         }
     }
 }

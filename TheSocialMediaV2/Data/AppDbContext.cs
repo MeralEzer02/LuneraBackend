@@ -2,6 +2,10 @@
 using System.Text.Json;
 using TheSocialMediaV2.Domain.Entities;
 using TheSocialMediaV2.Domain.Events;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TheSocialMediaV2.API.Data
 {
@@ -185,7 +189,7 @@ namespace TheSocialMediaV2.API.Data
         // --- ATOMIC OUTBOX IMPLEMENTATION & INVARIANT GUARD ---
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            // Invariant Validation
+            // 1. Invariant Validation
             var matches = ChangeTracker.Entries<Match>()
                 .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
                 .Select(e => e.Entity);
@@ -195,43 +199,44 @@ namespace TheSocialMediaV2.API.Data
                 match.EnsureInvariants(DateTime.UtcNow);
             }
 
-            ConvertDomainEventsToOutboxMessages();
+            // 2. Eventleri yakala ve outbox'a ekle (SİLME YOK HENÜZ)
+            var domainEntities = ChangeTracker.Entries<IHasDomainEvents>().ToList();
+            var events = domainEntities.SelectMany(e => e.Entity.DomainEvents).ToList();
 
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-
-        private void ConvertDomainEventsToOutboxMessages()
-        {
-            var events = ChangeTracker
-                .Entries<IHasDomainEvents>()
-                .Select(x => x.Entity)
-                .Where(entity => entity.DomainEvents.Any())
-                .ToList();
-
-            if (!events.Any()) return;
-
-            var outboxMessages = events
-                .SelectMany(entity =>
-                {
-                    var domainEvents = entity.DomainEvents.ToList();
-
-                    entity.ClearDomainEvents();
-
-                    return domainEvents;
-                })
-                .Select(domainEvent => new OutboxMessage(
+            if (events.Any())
+            {
+                var outboxMessages = events.Select(domainEvent => new OutboxMessage(
                     id: Guid.NewGuid(),
                     occurredOnUtc: DateTime.UtcNow,
                     type: domainEvent.GetType().AssemblyQualifiedName!,
-                    payload: JsonSerializer.Serialize(domainEvent, new JsonSerializerOptions
+                    payload: JsonSerializer.Serialize((object)domainEvent, new JsonSerializerOptions
                     {
                         WriteIndented = false,
                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                     })
-                ))
-                .ToList();
+                )).ToList();
 
-            OutboxMessages.AddRange(outboxMessages);
+                OutboxMessages.AddRange(outboxMessages);
+            }
+
+            try
+            {
+                // 3. Veritabanına Yaz
+                var result = await base.SaveChangesAsync(cancellationToken);
+
+                // 4. DÜZELTME 1.1: SADECE BAŞARILIYSA TEMİZLE
+                foreach (var entity in domainEntities)
+                {
+                    entity.Entity.ClearDomainEvents();
+                }
+
+                return result;
+            }
+            catch
+            {
+                // Hata durumunda eventler temizlenmez, transaction geri alınır ve hiçbir event kaybolmaz.
+                throw;
+            }
         }
     }
 }

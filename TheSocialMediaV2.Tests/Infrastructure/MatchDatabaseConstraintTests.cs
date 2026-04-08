@@ -28,7 +28,6 @@ namespace TheSocialMediaV2.Tests.Infrastructure
         [Fact]
         public async Task Insert_With_Invalid_User_Order_Should_Throw_ConstraintViolation()
         {
-            // Arrange
             using var context = _fixture.CreateContext();
             var now = DateTime.UtcNow;
             var expiresAt = now.AddHours(1);
@@ -45,22 +44,17 @@ namespace TheSocialMediaV2.Tests.Infrastructure
                 new SqlParameter("@ExpiresAt", expiresAt)
             };
 
-            // Act
             var exception = await Record.ExceptionAsync(() => context.Database.ExecuteSqlRawAsync(sql, parameters));
 
-            // Assert
             exception.Should().NotBeNull("Bir hata fırlatılmalıydı.");
-
             var sqlEx = GetSqlException(exception);
-            sqlEx.Should().NotBeNull("Hata doğrudan veya InnerException olarak bir SqlException içermelidir.");
-            sqlEx.Message.Should().Contain("CK_Match_UserNormalization",
-                "Veritabanı seviyesinde UserAId'nin UserBId'den küçük olması fiziksel olarak zorunludur.");
+            sqlEx.Should().NotBeNull();
+            sqlEx.Message.Should().Contain("CK_Match_UserNormalization");
         }
 
         [Fact]
         public async Task Insert_With_Invalid_TTL_Should_Throw_ConstraintViolation()
         {
-            // Arrange
             using var context = _fixture.CreateContext();
             var now = DateTime.UtcNow;
             var expiresAt = now.AddHours(-1);
@@ -77,27 +71,22 @@ namespace TheSocialMediaV2.Tests.Infrastructure
                 new SqlParameter("@ExpiresAt", expiresAt)
             };
 
-            // Act
             var exception = await Record.ExceptionAsync(() => context.Database.ExecuteSqlRawAsync(sql, parameters));
 
-            // Assert
             exception.Should().NotBeNull("Bir hata fırlatılmalıydı.");
-
             var sqlEx = GetSqlException(exception);
-            sqlEx.Should().NotBeNull("Hata doğrudan veya InnerException olarak bir SqlException içermelidir.");
-            sqlEx.Message.Should().Contain("CK_Match_TTL",
-                "Veritabanı geçmişe dönük son kullanma tarihini fiziksel olarak reddetmelidir.");
+            sqlEx.Should().NotBeNull();
+            sqlEx.Message.Should().Contain("CK_Match_TTL");
         }
 
         [Fact]
         public async Task Insert_With_Negative_RetryCount_Should_Throw()
         {
-            // Arrange
             using var context = _fixture.CreateContext();
             var now = DateTime.UtcNow;
 
             var sql = @"
-                INSERT INTO OutboxMessages (Id, RetryCount, OccurredOnUtc, Type, Data)
+                INSERT INTO OutboxMessages (Id, RetryCount, OccurredOnUtc, Type, Payload)
                 VALUES (NEWID(), @RetryCount, @OccurredOnUtc, 'test_type', 'test_data')";
 
             var parameters = new[]
@@ -106,22 +95,17 @@ namespace TheSocialMediaV2.Tests.Infrastructure
                 new SqlParameter("@OccurredOnUtc", now)
             };
 
-            // Act
             var exception = await Record.ExceptionAsync(() => context.Database.ExecuteSqlRawAsync(sql, parameters));
 
-            // Assert
             exception.Should().NotBeNull("Bir hata fırlatılmalıydı.");
-
             var sqlEx = GetSqlException(exception);
-            sqlEx.Should().NotBeNull("Hata doğrudan veya InnerException olarak bir SqlException içermelidir.");
-            sqlEx.Message.Should().Contain("CK_Outbox_RetryCount",
-                "Outbox tablosundaki tekrar deneme sayısı sıfırın altına düşemez.");
+            sqlEx.Should().NotBeNull();
+            sqlEx.Message.Should().Contain("CK_Outbox_RetryCount");
         }
 
         [Fact]
         public async Task Insert_With_Valid_Data_Should_Succeed()
         {
-            // Arrange
             using var context = _fixture.CreateContext();
             var now = DateTime.UtcNow;
             var expiresAt = now.AddHours(24);
@@ -144,11 +128,91 @@ namespace TheSocialMediaV2.Tests.Infrastructure
                 new SqlParameter("@ExpiresAt", expiresAt)
             };
 
-            // Act
             var affectedRows = await context.Database.ExecuteSqlRawAsync(sql, parameters);
+            affectedRows.Should().BeGreaterThan(0);
+        }
 
-            // Assert
-            affectedRows.Should().BeGreaterThan(0, "Kurallara tam uyan veri, veritabanına sorunsuz yazılabilmelidir.");
+        [Fact]
+        public async Task Insert_Duplicate_Id_To_Outbox_Should_Throw_PrimaryKey_Violation()
+        {
+            using var context = _fixture.CreateContext();
+            var now = DateTime.UtcNow;
+            var eventId = Guid.NewGuid(); 
+
+            var sql = @"
+                INSERT INTO OutboxMessages (Id, RetryCount, OccurredOnUtc, Type, Payload)
+                VALUES (@Id, 0, @OccurredOnUtc, 'test_type', 'test_data')";
+
+            var parameters1 = new[] { new SqlParameter("@Id", eventId), new SqlParameter("@OccurredOnUtc", now) };
+            var parameters2 = new[] { new SqlParameter("@Id", eventId), new SqlParameter("@OccurredOnUtc", now) };
+
+            await context.Database.ExecuteSqlRawAsync(sql, parameters1);
+
+            var exception = await Record.ExceptionAsync(() => context.Database.ExecuteSqlRawAsync(sql, parameters2));
+
+            exception.Should().NotBeNull("Primary Key (Birincil Anahtar) ihlali olmalıydı.");
+            var sqlEx = GetSqlException(exception);
+            sqlEx.Should().NotBeNull();
+
+            sqlEx.Number.Should().Be(2627, "SQL Server aynı Id'nin ikinci kez yazılmasını fiziksel olarak engellemelidir.");
+            sqlEx.Message.Should().Contain("PRIMARY KEY", "Aynı event iki kez kaydedilemez.");
+        }
+
+        [Fact]
+        public async Task SaveChanges_When_Outbox_Insert_Fails_Should_Rollback_Match_State()
+        {
+            // Arrange: Önce veritabanına geçerli bir Eşleşme (Pending statüsünde) ekliyoruz.
+            using var setupContext = _fixture.CreateContext();
+            var now = DateTime.UtcNow;
+
+            var userA = new User();
+            var userB = new User();
+            setupContext.Users.AddRange(userA, userB);
+            await setupContext.SaveChangesAsync();
+
+            var match = Match.Create(userA.Id, userB.Id, 24, now);
+            setupContext.Matches.Add(match);
+            await setupContext.SaveChangesAsync(); // Şu an DB'de 1 adet Pending Match var.
+
+            // DÜZELTME: Hazırlık aşamasında oluşan (UserCreated, MatchCreated) eventlerini çöpe atıyoruz.
+            // Böylece asıl test başladığında Outbox'ımız TERTEMİZ (0) olacak!
+            setupContext.OutboxMessages.RemoveRange(setupContext.OutboxMessages);
+            await setupContext.SaveChangesAsync();
+
+            // KİLİT NOKTA: Outbox tablosuna yazmayı FİZİKSEL OLARAK engelleyen bir kilit (Trigger) koyuyoruz!
+            await setupContext.Database.ExecuteSqlRawAsync(@"
+        CREATE TRIGGER trg_PreventOutboxInsert 
+        ON OutboxMessages 
+        INSTEAD OF INSERT 
+        AS 
+        THROW 50000, 'Outbox Insert Simulated Failure!', 1;
+    ");
+
+            try
+            {
+                using var handlerContext = _fixture.CreateContext();
+                var dbMatch = await handlerContext.Matches.FindAsync(match.Id);
+
+                dbMatch!.Accept(now.AddHours(1));
+
+                Func<Task> act = async () => await handlerContext.SaveChangesAsync();
+
+                await act.Should().ThrowAsync<Exception>();
+
+                using var verifyContext = _fixture.CreateContext();
+                var verifyMatch = await verifyContext.Matches.FindAsync(match.Id);
+
+                verifyMatch!.Status.Should().Be(TheSocialMediaV2.Domain.Enums.MatchStatus.Pending,
+                    "İşlem ATOMİK olduğu için Outbox patladığında, Match.Accept işlemi de GERİ ALINMALIDIR!");
+
+                var outboxCount = await verifyContext.OutboxMessages.CountAsync();
+                outboxCount.Should().Be(0, "Outbox tablosuna hiçbir şey yazılamamış olmalı.");
+            }
+            finally
+            {
+                using var cleanupContext = _fixture.CreateContext();
+                await cleanupContext.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS trg_PreventOutboxInsert");
+            }
         }
     }
 }
