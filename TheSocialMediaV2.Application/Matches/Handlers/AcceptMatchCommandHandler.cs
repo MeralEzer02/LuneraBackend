@@ -4,13 +4,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using TheSocialMediaV2.Application.Abstractions.Repositories;
 using TheSocialMediaV2.Application.Abstractions.Services;
-using TheSocialMediaV2.Application.Exceptions; // EKLENDİ: Özel hata sınıfımız
+using TheSocialMediaV2.Application.Exceptions;
 using TheSocialMediaV2.Application.Matches.Commands;
-using TheSocialMediaV2.Domain.Enums; // EKLENDİ: MatchStatus için
+using TheSocialMediaV2.Domain.Enums;
 
 namespace TheSocialMediaV2.Application.Matches.Handlers
 {
-    public class AcceptMatchCommandHandler : IRequestHandler<AcceptMatchCommand>
+    public class AcceptMatchCommandHandler : IRequestHandler<AcceptMatchCommand, Unit>
     {
         private readonly IMatchRepository _matchRepository;
         private readonly IClock _clock;
@@ -21,8 +21,9 @@ namespace TheSocialMediaV2.Application.Matches.Handlers
             _clock = clock;
         }
 
-        public async Task Handle(AcceptMatchCommand request, CancellationToken cancellationToken)
+        public async Task<Unit> Handle(AcceptMatchCommand request, CancellationToken cancellationToken)
         {
+            // 1. VERİYİ GETİR
             var match = await _matchRepository.GetByIdAsync(request.MatchId, cancellationToken);
 
             if (match == null)
@@ -30,14 +31,21 @@ namespace TheSocialMediaV2.Application.Matches.Handlers
                 throw new NotFoundException($"Eşleşme bulunamadı: {request.MatchId}");
             }
 
+            if (match.UserAId != request.UserId && match.UserBId != request.UserId)
+            {
+                throw new InvalidOperationException("Bu eşleşmeyi kabul etme yetkiniz yok.");
+            }
+
             if (match.Status == MatchStatus.Accepted)
             {
-                return;
+                return Unit.Value;
             }
 
             match.Accept(_clock.UtcNow);
 
             await _matchRepository.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
         }
     }
 }

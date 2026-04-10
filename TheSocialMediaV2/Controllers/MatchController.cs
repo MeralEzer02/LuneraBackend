@@ -5,11 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using TheSocialMediaV2.API.Data;
 using TheSocialMediaV2.API.DTOs;
 using TheSocialMediaV2.Domain.Entities;
 using TheSocialMediaV2.Application.Matches.Commands;
+using TheSocialMediaV2.Application.Matches.DTOs;
 
 namespace TheSocialMediaV2.API.Controllers
 {
@@ -78,16 +80,16 @@ namespace TheSocialMediaV2.API.Controllers
 
         // POST: api/match/5/accept
         [HttpPost("{id}/accept")]
-        public async Task<IActionResult> Accept(int id)
+        public async Task<IActionResult> Accept(
+            int id,
+            [FromBody] AcceptMatchRequest request,
+            CancellationToken ct)
         {
-            var myIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(myIdStr)) return Unauthorized();
-            int myId = int.Parse(myIdStr);
+            var command = new AcceptMatchCommand(id, request.UserId);
 
-            var command = new AcceptMatchCommand(id, myId);
-            await _mediator.Send(command);
+            await _mediator.Send(command, ct);
 
-            return Ok(new { Message = "Eşleşme başarıyla kabul edildi!" });
+            return Ok();
         }
     }
 }

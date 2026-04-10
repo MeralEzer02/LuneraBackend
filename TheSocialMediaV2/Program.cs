@@ -87,7 +87,16 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(secretKey)
     };
-});   
+});
+
+// MediatR Kaydý
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(TheSocialMediaV2.Application.Matches.Commands.AcceptMatchCommand).Assembly));
+
+// Repository Kaydý
+builder.Services.AddScoped<TheSocialMediaV2.Application.Abstractions.Repositories.IMatchRepository, TheSocialMediaV2.API.Data.MatchRepository>();
+
+// Zaman Servisi Kaydý
+builder.Services.AddSingleton<TheSocialMediaV2.Application.Abstractions.Services.IClock, TheSocialMediaV2.API.Services.SystemClock>();
 
 var app = builder.Build();
 
@@ -113,3 +122,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+public partial class Program { }
