@@ -43,10 +43,10 @@ namespace TheSocialMediaV2.API.Services
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var dispatcher = scope.ServiceProvider.GetRequiredService<IInternalDomainEventDispatcher>();
 
-            // 1. FETCH: İşlenmemiş ve retry limitini aşmamış mesajları getir
             var messages = await dbContext.OutboxMessages
                 .Where(m => m.ProcessedOnUtc == null && m.RetryCount <= 5)
                 .OrderBy(m => m.OccurredOnUtc)
+                .ThenBy(m => m.Id)
                 .Take(BatchSize)
                 .ToListAsync(stoppingToken);
 
@@ -56,17 +56,14 @@ namespace TheSocialMediaV2.API.Services
             {
                 try
                 {
-                    // 2. RESOLVE: Event tipini bul ve deserialize et
                     var eventType = typeof(MatchAcceptedEvent).Assembly.GetType(message.Type);
                     if (eventType == null) throw new InvalidOperationException($"Tip çözülemedi: {message.Type}");
 
                     var domainEvent = JsonSerializer.Deserialize(message.Payload, eventType) as IInternalDomainEvent;
                     if (domainEvent == null) throw new InvalidOperationException("Payload geçersiz.");
 
-                    // 3. DISPATCH: Dünyaya duyur (At-Least-Once)
                     await dispatcher.Dispatch((dynamic)domainEvent);
 
-                    // 4. MARK: Başarıyı mühürle
                     message.ProcessedOnUtc = DateTime.UtcNow;
                     message.Error = null;
                 }
@@ -78,7 +75,6 @@ namespace TheSocialMediaV2.API.Services
                 }
             }
 
-            // 5. COMMIT: Tüm durumları tek seferde DB'ye yansıt
             await dbContext.SaveChangesAsync(stoppingToken);
         }
     }

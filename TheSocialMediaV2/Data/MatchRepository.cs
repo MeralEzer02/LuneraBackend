@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TheSocialMediaV2.Application.Abstractions.Repositories;
 using TheSocialMediaV2.Domain.Entities;
+using TheSocialMediaV2.Application.Exceptions;
 
 namespace TheSocialMediaV2.API.Data
 {
@@ -23,7 +24,14 @@ namespace TheSocialMediaV2.API.Data
 
         public async Task SaveChangesAsync(CancellationToken ct = default)
         {
-            await _context.SaveChangesAsync(ct);
+            try
+            {
+                await _context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyException("Eşzamanlılık çakışması yaşandı.");
+            }
         }
     }
 }

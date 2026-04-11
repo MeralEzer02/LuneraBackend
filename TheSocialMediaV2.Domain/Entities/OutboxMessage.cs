@@ -1,17 +1,19 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheSocialMediaV2.Domain.Entities
 {
     public class OutboxMessage
     {
-        public OutboxMessage(Guid id, DateTime occurredOnUtc, string type, string payload)
+        public OutboxMessage(Guid id, Guid eventId, DateTime occurredOnUtc, string type, string payload)
         {
             Id = id;
+            EventId = eventId;
             OccurredOnUtc = occurredOnUtc;
             Type = type;
             Payload = payload;
-            RetryCount = 0; // Default
-            ProcessedOnUtc = null; // Default (Pending)
+            RetryCount = 0; 
+            ProcessedOnUtc = null;
         }
 
         // EF Core Constructor
@@ -19,18 +21,20 @@ namespace TheSocialMediaV2.Domain.Entities
 
         public Guid Id { get; private set; }
 
+        public Guid EventId { get; private set; }
+
         public DateTime OccurredOnUtc { get; private set; }
 
         [Required]
-        public string Type { get; private set; } // Event Tipi (Full Name)
+        public string Type { get; private set; }
 
         [Required]
-        public string Payload { get; private set; } // JSON Data
+        public string Payload { get; private set; }
 
-        public DateTime? ProcessedOnUtc { get; set; } // İşlendiği zaman (Null ise Pending)
+        public DateTime? ProcessedOnUtc { get; set; }
 
-        public string? Error { get; set; } // Hata detayı (Poison Message analizi için)
+        public string? Error { get; set; }
 
-        public int RetryCount { get; set; } // Kaç kere denendi? (Backoff için)
+        public int RetryCount { get; set; }
     }
 }

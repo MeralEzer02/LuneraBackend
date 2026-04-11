@@ -23,7 +23,6 @@ namespace TheSocialMediaV2.Application.Matches.Handlers
 
         public async Task<Unit> Handle(AcceptMatchCommand request, CancellationToken cancellationToken)
         {
-            // 1. VERİYİ GETİR
             var match = await _matchRepository.GetByIdAsync(request.MatchId, cancellationToken);
 
             if (match == null)
@@ -43,7 +42,21 @@ namespace TheSocialMediaV2.Application.Matches.Handlers
 
             match.Accept(_clock.UtcNow);
 
-            await _matchRepository.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _matchRepository.SaveChangesAsync(cancellationToken);
+            }
+            catch (ConcurrencyException)
+            {
+                var currentMatch = await _matchRepository.GetByIdAsync(request.MatchId, cancellationToken);
+
+                if (currentMatch != null && currentMatch.Status == MatchStatus.Accepted)
+                {
+                    return Unit.Value;
+                }
+
+                throw new InvalidOperationException("Bu eşleşmenin durumu bir başkası tarafından değiştirilmiş.");
+            }
 
             return Unit.Value;
         }

@@ -183,6 +183,8 @@ namespace TheSocialMediaV2.API.Data
 
                 entity.HasIndex(e => e.RetryCount)
                       .HasFilter("[RetryCount] > 0");
+
+                entity.HasIndex(e => e.EventId).IsUnique();
             });
         }
 
@@ -199,15 +201,15 @@ namespace TheSocialMediaV2.API.Data
                 match.EnsureInvariants(DateTime.UtcNow);
             }
 
-            // 2. Eventleri yakala ve outbox'a ekle (SİLME YOK HENÜZ)
             var domainEntities = ChangeTracker.Entries<IHasDomainEvents>().ToList();
-            var events = domainEntities.SelectMany(e => e.Entity.DomainEvents).ToList();
+            var events = domainEntities.SelectMany(e => e.Entity.DomainEvents).Cast<IInternalDomainEvent>().ToList();
 
             if (events.Any())
             {
                 var outboxMessages = events.Select(domainEvent => new OutboxMessage(
                     id: Guid.NewGuid(),
-                    occurredOnUtc: DateTime.UtcNow,
+                    eventId: domainEvent.EventId,
+                    occurredOnUtc: domainEvent.OccurredOn,
                     type: domainEvent.GetType().AssemblyQualifiedName!,
                     payload: JsonSerializer.Serialize((object)domainEvent, new JsonSerializerOptions
                     {
@@ -221,10 +223,8 @@ namespace TheSocialMediaV2.API.Data
 
             try
             {
-                // 3. Veritabanına Yaz
                 var result = await base.SaveChangesAsync(cancellationToken);
 
-                // 4. DÜZELTME 1.1: SADECE BAŞARILIYSA TEMİZLE
                 foreach (var entity in domainEntities)
                 {
                     entity.Entity.ClearDomainEvents();
@@ -234,7 +234,6 @@ namespace TheSocialMediaV2.API.Data
             }
             catch
             {
-                // Hata durumunda eventler temizlenmez, transaction geri alınır ve hiçbir event kaybolmaz.
                 throw;
             }
         }

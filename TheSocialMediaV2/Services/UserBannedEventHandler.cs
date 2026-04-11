@@ -25,7 +25,6 @@ namespace TheSocialMediaV2.API.Services
                 return;
             }
 
-            // 1. Metric Bul/Oluştur
             var metric = await _context.UserAbuseMetrics
                 .FirstOrDefaultAsync(m => m.UserId == domainEvent.UserId);
 
@@ -35,14 +34,12 @@ namespace TheSocialMediaV2.API.Services
                 _context.UserAbuseMetrics.Add(metric);
             }
 
-            // 2. İstatistikleri Güncelle
             metric.TotalBans++;
             metric.LastBanDate = domainEvent.OccurredOn;
             metric.AbuseScore += 20;
             metric.RiskLevel = CalculateRiskLevel(metric.AbuseScore, metric.TotalBans);
             metric.LastUpdated = DateTime.UtcNow;
 
-            // 3. OLAYI "İŞLENDİ" OLARAK İŞARETLE (Ledger Entry)
             _context.ProcessedEvents.Add(new ProcessedEvent
             {
                 EventId = domainEvent.EventId,
