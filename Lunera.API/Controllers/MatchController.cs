@@ -142,5 +142,40 @@ namespace Lunera.API.Controllers
 
             return Ok(result);
         }
+
+        // GET: api/match/active
+        [HttpGet("active")]
+        public async Task<IActionResult> GetActiveMatches()
+        {
+            var myIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(myIdStr)) return Unauthorized();
+            int myId = int.Parse(myIdStr);
+
+            var activeMatches = await _context.Matches
+                .Where(m => (m.UserAId == myId || m.UserBId == myId) && m.Status == MatchStatus.Accepted)
+                .Select(m => new
+                {
+                    MatchId = m.Id,
+                    OtherUser = m.UserAId == myId ? m.UserB.UserProfile : m.UserA.UserProfile,
+                    LastMessage = _context.Messages
+                        .Where(msg => msg.MatchId == m.Id)
+                        .OrderByDescending(msg => msg.CreatedAt)
+                        .FirstOrDefault(),
+                    UnreadCount = _context.Messages
+                        .Count(msg => msg.MatchId == m.Id && msg.SenderId != myId && !msg.IsRead)
+                })
+                .ToListAsync();
+
+            var result = activeMatches.Select(x => new
+            {
+                MatchId = x.MatchId,
+                UserId = x.OtherUser.UserId,
+                Nickname = x.OtherUser.Nickname ?? "Anonim",
+                LastMessage = x.LastMessage != null ? x.LastMessage.Content : "Henüz mesaj yok.",
+                UnreadCount = x.UnreadCount
+            });
+
+            return Ok(result);
+        }
     }
 }

@@ -10,6 +10,8 @@ using Lunera.API.DTOs;
 using Lunera.Domain.Utilities;
 using Lunera.Domain.Entities;
 using Lunera.Domain.Enums;
+using System.Threading.Tasks;
+using System;
 
 namespace Lunera.API.Controllers
 {
@@ -54,7 +56,7 @@ namespace Lunera.API.Controllers
                     PasswordHash = PasswordHasher.HashPassword(request.Password),
                     RoleId = 1,
                     Status = 1,
-                    CreatedAt = DateTime.UtcNow, // Best Practice: UtcNow
+                    CreatedAt = DateTime.UtcNow,
                     WarningCount = 0
                 };
 
@@ -90,29 +92,23 @@ namespace Lunera.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto request)
         {
-            // 1. Kullanıcıyı Bul
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (user == null)
             {
                 return Unauthorized("E-posta veya şifre hatalı.");
             }
 
-            // 2. Şifre Kontrolü
             var inputHash = PasswordHasher.HashPassword(request.Password);
             if (user.PasswordHash != inputHash)
             {
                 return Unauthorized("E-posta veya şifre hatalı.");
             }
 
-            // 3. Basit Status Kontrolü (Legacy)
             if (user.Status == 2)
             {
                 return StatusCode(403, new { message = "Hesabınız yasaklanmıştır." });
             }
 
-            // 4. 🛑 KRİTİK GÜVENLİK KONTROLÜ (A3.3 - Deep Ban Check)
-            // Token üretmeden önce, veritabanında aktif ve kapanmamış bir ban dosyası var mı?
-            // Bu kontrol, Admin panelinden atılan süreli banların Login anında yakalanmasını sağlar.
             bool hasActiveBan = await _context.UserBans
                 .AsNoTracking()
                 .AnyAsync(b => b.UserId == user.Id
@@ -121,7 +117,6 @@ namespace Lunera.API.Controllers
 
             if (hasActiveBan)
             {
-                // Eğer status güncel değilse onu da düzeltelim (Self-Healing)
                 if (user.Status != 2)
                 {
                     user.Status = 2;
@@ -131,7 +126,6 @@ namespace Lunera.API.Controllers
                 return StatusCode(403, new { message = "Hesabınızda aktif bir yasaklama bulunmaktadır. Oturum açılamaz." });
             }
 
-            // 5. Her şey temizse Token ver
             var token = GenerateJwtToken(user);
 
             return Ok(new { token = token });
@@ -140,19 +134,29 @@ namespace Lunera.API.Controllers
         // GET: api/auth/my-profile
         [Authorize]
         [HttpGet("my-profile")]
-        public IActionResult GetMyProfile()
+        public async Task<IActionResult> GetMyProfile()
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+            int userId = int.Parse(userIdStr);
+
+            var user = await _context.Users
+                .Include(u => u.UserProfile)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null) return NotFound("Kullanıcı bulunamadı.");
+
             var role = User.FindFirst(ClaimTypes.Role)?.Value;
 
             return Ok(new
             {
-                message = "Tebrikler! Bu özel alana girdiniz.",
-                id = userId,
-                email = email,
-                role = role,
-                serverTime = DateTime.UtcNow
+                id = user.Id,
+                email = user.Email,
+                nickname = user.UserProfile?.Nickname,
+                realName = user.UserProfile?.RealName,
+                bio = user.UserProfile?.Bio,
+                status = user.Status,
+                role = role
             });
         }
 
@@ -178,7 +182,7 @@ namespace Lunera.API.Controllers
                 issuer: jwtSettings["Issuer"],
                 audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddDays(7), // Best Practice: UtcNow
+                expires: DateTime.UtcNow.AddDays(7),
                 signingCredentials: creds
             );
 
