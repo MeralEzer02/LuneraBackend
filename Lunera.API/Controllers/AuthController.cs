@@ -160,6 +160,32 @@ namespace Lunera.API.Controllers
             });
         }
 
+        // PUT: api/auth/my-profile
+        [Authorize]
+        [HttpPut("my-profile")]
+        public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfileDto dto)
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
+            int userId = int.Parse(userIdStr);
+
+            var profile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (profile == null) return NotFound("Profil bulunamadı.");
+
+            if (await _context.UserProfiles.AnyAsync(p => p.Nickname == dto.Nickname && p.UserId != userId))
+            {
+                return BadRequest("Bu takma ad başkası tarafından kullanılıyor.");
+            }
+
+            profile.Nickname = dto.Nickname;
+            profile.RealName = dto.RealName;
+            profile.Bio = dto.Bio;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Profil başarıyla güncellendi." });
+        }
+
         private string GenerateJwtToken(User user)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
