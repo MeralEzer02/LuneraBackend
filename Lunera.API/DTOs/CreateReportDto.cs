@@ -5,7 +5,7 @@ namespace Lunera.API.DTOs
     public class CreateReportDto
     {
         [Required]
-        public int TargetUserId { get; set; } // Kimi şikayet ediyorsun?
+        public int TargetUserId { get; set; }
 
         [Required]
         [MinLength(5, ErrorMessage = "Lütfen en az 5 karakterlik bir sebep belirtin.")]

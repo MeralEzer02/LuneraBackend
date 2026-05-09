@@ -11,7 +11,7 @@ using Lunera.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 0. Serilog Loglama Sistemini Baþlat
+// 0. Serilog Loglama
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
 
@@ -21,18 +21,29 @@ builder.Host.UseSerilog((context, configuration) =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddControllers();
+
 // Servis Kayýtlarý
 builder.Services.AddScoped<Lunera.API.Services.IAdminActionLogger, Lunera.API.Services.AdminActionLogger>();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
 // --- EVENT LAYER ---
 builder.Services.AddScoped<IInternalDomainEventDispatcher, DomainEventDispatcher>();
 
-// Handler'larý tek tek kaydediyoruz
+// Handler
 builder.Services.AddScoped<IInternalDomainEventHandler<UserBannedEvent>, UserBannedEventHandler>();
 
 builder.Services.AddHostedService<Lunera.API.Services.OutboxProcessorBackgroundService>();
+
+// CORS ÝZNÝ
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 // Swagger Ayarlarý (JWT Desteði ile)
 builder.Services.AddSwaggerGen(option =>
@@ -116,6 +127,8 @@ app.UseMiddleware<Lunera.API.Middlewares.ExceptionHandlingMiddleware>();
 app.UseAuthentication();
 
 app.UseMiddleware<Lunera.API.Middlewares.BanCheckMiddleware>();
+
+app.UseCors();
 
 app.UseAuthorization();
 

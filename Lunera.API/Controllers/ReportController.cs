@@ -10,7 +10,7 @@ namespace Lunera.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Sadece giriş yapmış kullanıcılar
+    [Authorize]
     public class ReportController : ControllerBase
     {
         private readonly AppDbContext _context;

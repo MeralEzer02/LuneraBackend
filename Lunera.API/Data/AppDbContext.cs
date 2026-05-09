@@ -50,8 +50,8 @@ namespace Lunera.API.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasIndex(m => new { m.UserAId, m.UserBId })
-                      .IsUnique()
-                      .HasFilter("[Status] IN (1, 2)");
+                                      .IsUnique()
+                                      .HasFilter("[Status] IN (0, 1)");
 
                 entity.Property(m => m.RowVersion)
                       .IsRowVersion();

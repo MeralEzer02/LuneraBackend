@@ -18,7 +18,6 @@ namespace Lunera.Domain.Utilities;
             }
         }
 
-        // Şifre doğrulama metodu (Login için gerekli olacak)
         public static bool VerifyPassword(string inputPassword, string hashedPassword)
         {
             var hashOfInput = HashPassword(inputPassword);
