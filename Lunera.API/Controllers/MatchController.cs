@@ -65,7 +65,6 @@ namespace Lunera.API.Controllers
             var random = new Random();
             var luckyWinner = candidates[random.Next(candidates.Count)];
 
-
             var result = new MatchResultDto
             {
                 MatchId = 0,
@@ -82,7 +81,7 @@ namespace Lunera.API.Controllers
             return Ok(result);
         }
 
-        // POST: api/match/5/accept
+        // POST: api/match/5/accept (Gelen istekleri ID ile kabul etmek için)
         [HttpPost("{id}/accept")]
         public async Task<IActionResult> Accept(int id)
         {
@@ -97,6 +96,7 @@ namespace Lunera.API.Controllers
             return Ok(new { message = "Eşleşme başarıyla sağlandı! 🎉" });
         }
 
+        // POST: api/match/request/5 (Keşif ekranında birini beğenmek için)
         [HttpPost("request/{targetUserId}")]
         public async Task<IActionResult> SendMatchRequest(int targetUserId)
         {
@@ -104,15 +104,32 @@ namespace Lunera.API.Controllers
             if (string.IsNullOrEmpty(myIdStr)) return Unauthorized();
             int myId = int.Parse(myIdStr);
 
+            var incomingRequest = await _context.Matches
+                .FirstOrDefaultAsync(m => m.UserAId == targetUserId && m.UserBId == myId && m.Status == MatchStatus.Pending);
+
+            if (incomingRequest != null)
+            {
+                var command = new AcceptMatchCommand(incomingRequest.Id, myId);
+                await _mediator.Send(command, HttpContext.RequestAborted);
+
+                return Ok(new { message = "Çift taraflı eşleşme sağlandı! 🎉 Artık mesajlaşabilirsiniz.", isMutual = true });
+            }
+
+            var alreadySent = await _context.Matches
+                .AnyAsync(m => m.UserAId == myId && m.UserBId == targetUserId && m.Status == MatchStatus.Pending);
+
+            if (alreadySent)
+                return Conflict("Bu kullanıcıya zaten bir eşleşme isteği gönderdin.");
+
             var newMatch = Match.Create(myId, targetUserId, 24, DateTime.UtcNow);
 
             _context.Matches.Add(newMatch);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "İstek başarıyla gönderildi! Karşı tarafın onayı bekleniyor. ⏳" });
+            return Ok(new { message = "İstek başarıyla gönderildi! Karşı tarafın onayı bekleniyor. ⏳", isMutual = false });
         }
 
-        // Bekleyen eşleşmeleri (Gelen İstekleri) Listele
+        // Bekleyen eşleşmeleri (Gelen ve Giden Tüm İstekleri) Listele
         [HttpGet("pending")]
         public async Task<IActionResult> GetPendingRequests()
         {
@@ -127,7 +144,9 @@ namespace Lunera.API.Controllers
                 .ToListAsync();
 
             var result = pendingMatches.Select(m => {
-                var otherUser = m.UserAId == myId ? m.UserB.UserProfile : m.UserA.UserProfile;
+                bool isSentByMe = (m.UserAId == myId);
+
+                var otherUser = isSentByMe ? m.UserB.UserProfile : m.UserA.UserProfile;
 
                 return new
                 {
@@ -136,7 +155,8 @@ namespace Lunera.API.Controllers
                     Nickname = otherUser.Nickname ?? "Anonim",
                     RealName = otherUser.RealName,
                     Bio = otherUser.Bio,
-                    ExpiresAt = m.ExpiresAt
+                    ExpiresAt = m.ExpiresAt,
+                    IsSentByMe = isSentByMe 
                 };
             });
 
