@@ -81,7 +81,7 @@ namespace Lunera.API.Controllers
             return Ok(result);
         }
 
-        // POST: api/match/5/accept (Gelen istekleri ID ile kabul etmek için)
+        // POST: api/match/5/accept
         [HttpPost("{id}/accept")]
         public async Task<IActionResult> Accept(int id)
         {
@@ -96,7 +96,7 @@ namespace Lunera.API.Controllers
             return Ok(new { message = "Eşleşme başarıyla sağlandı! 🎉" });
         }
 
-        // POST: api/match/request/5 (Keşif ekranında birini beğenmek için)
+        // POST: api/match/request/5
         [HttpPost("request/{targetUserId}")]
         public async Task<IActionResult> SendMatchRequest(int targetUserId)
         {
@@ -129,7 +129,6 @@ namespace Lunera.API.Controllers
             return Ok(new { message = "İstek başarıyla gönderildi! Karşı tarafın onayı bekleniyor. ⏳", isMutual = false });
         }
 
-        // Bekleyen eşleşmeleri (Gelen ve Giden Tüm İstekleri) Listele
         [HttpGet("pending")]
         public async Task<IActionResult> GetPendingRequests()
         {
@@ -146,17 +145,17 @@ namespace Lunera.API.Controllers
             var result = pendingMatches.Select(m => {
                 bool isSentByMe = (m.UserAId == myId);
 
-                var otherUser = isSentByMe ? m.UserB.UserProfile : m.UserA.UserProfile;
+                var otherUser = isSentByMe ? m.UserB?.UserProfile : m.UserA?.UserProfile;
 
                 return new
                 {
-                    MatchId = m.Id,
-                    UserId = otherUser.UserId,
-                    Nickname = otherUser.Nickname ?? "Anonim",
-                    RealName = otherUser.RealName,
-                    Bio = otherUser.Bio,
-                    ExpiresAt = m.ExpiresAt,
-                    IsSentByMe = isSentByMe 
+                    matchId = m.Id,
+                    userId = otherUser?.UserId ?? 0,
+                    nickname = otherUser?.Nickname ?? "Anonim",
+                    realName = otherUser?.RealName ?? string.Empty,
+                    bio = otherUser?.Bio ?? string.Empty,
+                    expiresAt = m.ExpiresAt,
+                    isSentByMe = isSentByMe 
                 };
             });
 
@@ -188,11 +187,11 @@ namespace Lunera.API.Controllers
 
             var result = activeMatches.Select(x => new
             {
-                MatchId = x.MatchId,
-                UserId = x.OtherUser.UserId,
-                Nickname = x.OtherUser.Nickname ?? "Anonim",
-                LastMessage = x.LastMessage != null ? x.LastMessage.Content : "Henüz mesaj yok.",
-                UnreadCount = x.UnreadCount
+                matchId = x.MatchId,
+                userId = x.OtherUser?.UserId ?? 0,
+                nickname = x.OtherUser?.Nickname ?? "Anonim",
+                lastMessage = x.LastMessage != null ? x.LastMessage.Content : "Henüz mesaj yok.",
+                unreadCount = x.UnreadCount
             });
 
             return Ok(result);
